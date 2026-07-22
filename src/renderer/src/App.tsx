@@ -57,6 +57,7 @@ import {
 } from './components/terminal-pane/use-system-prefers-dark'
 import RightSidebar from './components/right-sidebar'
 import { StarNagCard } from './components/StarNagCard'
+import { TeamclaudeCockpit } from './components/teamclaude/TeamclaudeCockpit'
 import { StarNagAgentValueMomentObserver } from './components/star-nag/StarNagAgentValueMomentObserver'
 import { StarNagToastHost } from './components/star-nag/StarNagToastHost'
 import { SkillFreshnessNudge } from './components/skills/SkillFreshnessNudge'
@@ -2704,6 +2705,14 @@ function App(): React.JSX.Element {
                 </RecoverableRenderErrorBoundary>
               </Suspense>
             ) : null}
+            <RecoverableRenderErrorBoundary
+              boundaryId="overlay.teamclaude-cockpit"
+              surface="overlay"
+              resetKey={activeView}
+              compact
+            >
+              <TeamclaudeCockpit />
+            </RecoverableRenderErrorBoundary>
             <RecoverableRenderErrorBoundary
               boundaryId="overlay.star-nag"
               surface="overlay"
