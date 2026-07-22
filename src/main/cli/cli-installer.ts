@@ -75,7 +75,12 @@ export class CliInstaller {
       return DEV_COMMAND_NAME
     }
     // Why: packaged Linux uses `orca-ide` to avoid shadowing GNOME Orca's /usr/bin/orca.
-    return this.platform === 'linux' ? LINUX_COMMAND_NAME : 'orca'
+    // Why `orcatc` on Windows: Orca TC installs side-by-side with official Orca,
+    // so the CLI must claim a distinct PATH command instead of `orca`.
+    if (this.platform === 'linux') {
+      return LINUX_COMMAND_NAME
+    }
+    return this.platform === 'win32' ? 'orcatc' : 'orca'
   }
 
   constructor(options: CliInstallerOptions = {}) {
@@ -185,7 +190,7 @@ export class CliInstaller {
       await this.installAppImageWrapper(status.commandPath, status.launcherPath)
       await this.removeLegacyLinuxCommandIfManaged(status.launcherPath)
     } else if (this.isWindowsPackagedBundledCommand(status.commandPath, status.launcherPath)) {
-      // Why: packaged Windows already ships resources/bin/orca.exe. Registration
+      // Why: packaged Windows already ships resources/bin/orcatc.exe. Registration
       // only owns the user PATH entry; rewriting the asset makes it recurse.
     } else {
       // Why: mkdir stays here for the Windows wrapper path — the target dir is
@@ -1185,7 +1190,10 @@ export function getBundledLauncherPath(
     return join(resourcesPath, 'bin', LINUX_COMMAND_NAME)
   }
   if (platform === 'win32') {
-    return join(resourcesPath, 'bin', 'orca.exe')
+    // Why: Orca TC ships the native launcher as orcatc.exe (packaged from
+    // OrcaCliLauncher, sibling OrcaTC.exe) so the `orcatc` command never
+    // collides with official Orca's `orca` on the user PATH.
+    return join(resourcesPath, 'bin', 'orcatc.exe')
   }
   return null
 }

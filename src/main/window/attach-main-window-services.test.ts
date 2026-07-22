@@ -86,7 +86,10 @@ vi.mock('../browser/browser-manager', () => ({
 
 vi.mock('../updater', () => ({
   checkForUpdates: vi.fn(),
+  checkForUpdatesFromMenu: vi.fn(),
+  downloadUpdate: vi.fn(),
   getUpdateStatus: vi.fn(),
+  isAutoUpdaterDisabled: vi.fn(() => false),
   quitAndInstall: vi.fn(),
   dismissNudge: vi.fn(),
   setupAutoUpdater: setupAutoUpdaterMock

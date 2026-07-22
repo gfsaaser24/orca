@@ -34,6 +34,15 @@ const ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL =
     ? JSON.stringify(orcaDiagnosticsTokenUrl)
     : 'null'
 
+// Why: this fork ("Orca TC") is a private side-by-side build that must NEVER
+// contact the official StablyAI update feed. ORCA_TC is a compile-time boolean
+// that hard-gates all auto-updater init, scheduling, and update UI in
+// src/main/updater.ts (removing electron-builder `publish` alone is
+// insufficient — the feed URL is hardcoded in updater.ts). It defaults to
+// `true` for this fork; set ORCA_TC=0 at build time to produce a
+// non-namespaced diagnostic build with the updater re-enabled.
+const ORCA_TC_LITERAL = process.env.ORCA_TC === '0' ? 'false' : 'true'
+
 function createStartupDiagnosticsBanner(chunkName: string): string {
   return `
 ;(() => {
@@ -199,7 +208,8 @@ export default defineConfig({
     define: {
       ORCA_BUILD_IDENTITY: ORCA_BUILD_IDENTITY_LITERAL,
       ORCA_POSTHOG_WRITE_KEY: ORCA_POSTHOG_WRITE_KEY_LITERAL,
-      ORCA_DIAGNOSTICS_TOKEN_URL: ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL
+      ORCA_DIAGNOSTICS_TOKEN_URL: ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL,
+      ORCA_TC: ORCA_TC_LITERAL
     },
     // Why: @xterm/headless declares "exports": null in package.json, which
     // prevents Vite's default resolver from finding the CJS entry. Point

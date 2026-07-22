@@ -20,3 +20,12 @@ declare const ORCA_POSTHOG_WRITE_KEY: string | null
 // point a packaged build at a staging server without re-running the
 // release pipeline.
 declare const ORCA_DIAGNOSTICS_TOKEN_URL: string | null
+
+// Compile-time boolean marking this build as the private side-by-side "Orca TC"
+// fork. Substituted by electron-vite's main `define` block (defaults to `true`
+// for this fork; ORCA_TC=0 disables). When `true`, src/main/updater.ts
+// hard-gates every auto-updater entry point so Orca TC never contacts the
+// official StablyAI update feed. Referenced defensively via
+// `typeof ORCA_TC !== 'undefined'` so unit tests (where the define is absent)
+// see the updater's normal, ungated behavior.
+declare const ORCA_TC: boolean

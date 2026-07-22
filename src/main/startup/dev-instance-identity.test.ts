@@ -4,11 +4,11 @@ import { getDevInstanceIdentity } from './dev-instance-identity'
 describe('dev-instance-identity', () => {
   it('keeps packaged identity stable', () => {
     expect(getDevInstanceIdentity(false, {})).toMatchObject({
-      name: 'Orca',
+      name: 'Orca TC',
       isDev: false,
       devLabel: null,
       dockBadgeLabel: null,
-      appUserModelId: 'com.stablyai.orca'
+      appUserModelId: 'com.gfsaaser.orca-tc'
     })
   })
 
@@ -26,9 +26,9 @@ describe('dev-instance-identity', () => {
       devWorktreeName: 'dev-indicator',
       devRepoRoot: '/repo/worktrees/dev-indicator'
     })
-    expect(identity.name).toBe('Orca: nwparker/dev-indicator')
+    expect(identity.name).toBe('Orca TC: nwparker/dev-indicator')
     expect(identity.dockBadgeLabel).toBeNull()
-    expect(identity.appUserModelId).toMatch(/^com\.stablyai\.orca\.dev\.[a-f0-9]{10}$/)
+    expect(identity.appUserModelId).toMatch(/^com\.gfsaaser\.orca-tc\.dev\.[a-f0-9]{10}$/)
   })
 
   it('includes the branch when it differs from the worktree basename', () => {
@@ -39,7 +39,7 @@ describe('dev-instance-identity', () => {
     })
 
     expect(identity.devLabel).toBe('payment-ui @ feature/billing-shell')
-    expect(identity.name).toBe('Orca: feature/billing-shell')
+    expect(identity.name).toBe('Orca TC: feature/billing-shell')
     expect(identity.dockBadgeLabel).toBeNull()
   })
 
@@ -51,7 +51,7 @@ describe('dev-instance-identity', () => {
     })
 
     expect(identity.devLabel).toBe('manual label')
-    expect(identity.name).toBe('Orca: feature/other')
+    expect(identity.name).toBe('Orca TC: feature/other')
     expect(identity.dockBadgeLabel).toBeNull()
   })
 })

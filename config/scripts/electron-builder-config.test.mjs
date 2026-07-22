@@ -70,7 +70,7 @@ describe('electron-builder config', () => {
         }),
         expect.objectContaining({
           from: 'native/windows-cli-launcher/.build/orca.exe',
-          to: 'bin/orca.exe'
+          to: 'bin/orcatc.exe'
         })
       ])
     )

@@ -55,6 +55,28 @@ const PRE_QUIT_CLEANUP_TIMEOUT_MS = 2_500
 const UPDATE_CHECK_SILENT_SETTLE_DELAY_MS = 1_000
 const UPDATE_CHECK_STALL_TIMEOUT_MS = 45_000
 
+// Why: "Orca TC" is a private side-by-side fork that must NEVER contact the
+// official StablyAI update feed. ORCA_TC is a compile-time boolean substituted
+// by electron-vite (see electron.vite.config.ts / build-constants.d.ts). When
+// it is true, every auto-updater entry point below hard-gates to a no-op so no
+// init, scheduling, network fetch, or update UI can run — removing the
+// electron-builder `publish` block alone is insufficient because the feed URL
+// is hardcoded in this file. The `typeof` guard keeps the define optional so
+// unit tests (where it is absent) exercise the updater's normal behavior.
+const IS_ORCA_TC: boolean =
+  typeof ORCA_TC !== 'undefined'
+    ? ORCA_TC
+    : ((globalThis as { ORCA_TC?: boolean }).ORCA_TC ?? false)
+
+/**
+ * True when this build has the auto-updater hard-gated off (Orca TC).
+ * attach-main-window-services uses this to skip scheduling setupAutoUpdater at
+ * all so no updater timers are armed.
+ */
+export function isAutoUpdaterDisabled(): boolean {
+  return IS_ORCA_TC
+}
+
 let mainWindowRef: BrowserWindow | null = null
 let currentStatus: UpdateStatus = { state: 'idle' }
 let userInitiatedCheck = false
@@ -1154,6 +1176,10 @@ function runBackgroundUpdateCheck(
 }
 
 export function checkForUpdates(): void {
+  // Why: Orca TC hard-gate — no background check may reach the official feed.
+  if (IS_ORCA_TC) {
+    return
+  }
   // Fire-and-forget the span so the public function signature stays
   // synchronous (callers do not await this). The span ALWAYS records
   // Success — it captures only the launch of the check, not its outcome.
@@ -1190,6 +1216,12 @@ function enableIncludePrerelease(): void {
 
 /** Menu-triggered check — delegates feedback to renderer toasts via userInitiated flag */
 export function checkForUpdatesFromMenu(options?: UpdateCheckOptions): void {
+  // Why: Orca TC hard-gate — a menu/IPC-triggered check must not contact the
+  // official feed. Surface "not-available" so the UI stays inert but honest.
+  if (IS_ORCA_TC) {
+    sendStatus({ state: 'not-available', userInitiated: true })
+    return
+  }
   if (!app.isPackaged || is.dev) {
     sendStatus({ state: 'not-available', userInitiated: true })
     return
@@ -1270,6 +1302,10 @@ export function isQuittingForUpdate(): boolean {
 }
 
 export function quitAndInstall(): void {
+  // Why: Orca TC never downloads updates, so there is nothing to install.
+  if (IS_ORCA_TC) {
+    return
+  }
   if (pendingQuitAndInstallTimer || quitAndInstallInProgress) {
     return
   }
@@ -1379,6 +1415,13 @@ export function setupAutoUpdater(
   _getDismissedUpdateNudgeId = opts?.getDismissedUpdateNudgeId ?? null
   _setPendingUpdateNudgeId = opts?.setPendingUpdateNudgeId ?? null
   _setDismissedUpdateNudgeId = opts?.setDismissedUpdateNudgeId ?? null
+
+  // Why: Orca TC never runs the auto-updater. Return before any getAutoUpdater()
+  // (which require()s electron-updater), feed-URL pinning, handler registration,
+  // or nudge/daily scheduling so no code path can reach the official feed.
+  if (IS_ORCA_TC) {
+    return
+  }
 
   if (!app.isPackaged && !is.dev) {
     return
@@ -1505,6 +1548,10 @@ export function setupAutoUpdater(
 }
 
 export function downloadUpdate(): void {
+  // Why: Orca TC hard-gate — no update is ever available to download.
+  if (IS_ORCA_TC) {
+    return
+  }
   if (downloadInFlight) {
     return
   }

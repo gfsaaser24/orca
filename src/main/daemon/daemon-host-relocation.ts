@@ -52,13 +52,17 @@ const MARKER_NAME = '.materialized.json'
 // name is shared verbatim with the NSIS uninstall cleanup
 // (config/nsis/daemon-host-uninstall.nsh), which removes
 // %LOCALAPPDATA%\<LOCAL_HOST_ROOT_NAME>\daemon-host — keep the two in sync.
-const LOCAL_HOST_ROOT_NAME = 'Orca'
+// Orca TC namespaces this to `OrcaTC` so a side-by-side official Orca install
+// keeps its own %LOCALAPPDATA%\Orca\daemon-host tree untouched.
+const LOCAL_HOST_ROOT_NAME = 'OrcaTC'
 
-// The relocated host exe is a copy of Orca.exe renamed to a distinct image
-// name. The NSIS updater's name-based kill (`taskkill /IM Orca.exe`) matches by
-// image name, so a distinct name spares the daemon from that branch, while the
-// userData path (outside $INSTDIR) spares it from the path-based branch.
-const DAEMON_HOST_EXE_NAME = 'orca-terminal-daemon.exe'
+// The relocated host exe is a copy of OrcaTC.exe renamed to a distinct image
+// name. The NSIS updater's name-based kill (`taskkill /IM OrcaTC.exe`) matches
+// by image name, so a distinct name spares the daemon from that branch, while
+// the userData path (outside $INSTDIR) spares it from the path-based branch.
+// The name is also distinct from official Orca's `orca-terminal-daemon.exe` so
+// a side-by-side uninstall of either app never kills the other's daemon.
+const DAEMON_HOST_EXE_NAME = 'orcatc-terminal-daemon.exe'
 
 // V8 snapshots + ICU data the Electron bootstrap reads even under
 // ELECTRON_RUN_AS_NODE; siblings of Orca.exe in win-unpacked.

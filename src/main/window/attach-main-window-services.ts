@@ -23,6 +23,7 @@ import {
   checkForUpdatesFromMenu,
   downloadUpdate,
   getUpdateStatus,
+  isAutoUpdaterDisabled,
   quitAndInstall,
   setupAutoUpdater,
   dismissNudge
@@ -183,10 +184,16 @@ export function attachMainWindowServices(
     })
     logStartupMilestone('updater-setup-done')
   }
-  pendingAutoUpdaterSetup = setupAutoUpdaterDeferred
-  mainWindow.once('ready-to-show', () => setImmediate(setupAutoUpdaterDeferred))
-  const updaterSetupFallback = setTimeout(setupAutoUpdaterDeferred, UPDATER_SETUP_FALLBACK_MS)
-  updaterSetupFallback.unref?.()
+  // Why: Orca TC hard-gates the auto-updater (isAutoUpdaterDisabled === true),
+  // so skip scheduling setupAutoUpdater entirely — no ready-to-show hook and no
+  // fallback timer are armed, guaranteeing the official StablyAI feed is never
+  // contacted. The IPC handlers below still register but no-op in this build.
+  if (!isAutoUpdaterDisabled()) {
+    pendingAutoUpdaterSetup = setupAutoUpdaterDeferred
+    mainWindow.once('ready-to-show', () => setImmediate(setupAutoUpdaterDeferred))
+    const updaterSetupFallback = setTimeout(setupAutoUpdaterDeferred, UPDATER_SETUP_FALLBACK_MS)
+    updaterSetupFallback.unref?.()
+  }
   registerRuntimeWindowLifecycle(mainWindow, runtime)
 
   const allowedPermissions = new Set(['media', 'fullscreen', 'pointerLock'])

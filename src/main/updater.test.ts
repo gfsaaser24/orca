@@ -3286,3 +3286,56 @@ describe('updater', () => {
     })
   })
 })
+
+describe('updater Orca TC hard-gate (ORCA_TC build)', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    autoUpdaterMock.reset()
+    powerMonitorOnMock.mockReset()
+    appMock.on.mockReset?.()
+    appMock.isPackaged = true
+    isMock.dev = false
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+    // Why: emulate the compile-time ORCA_TC define being `true` for this fork.
+    vi.stubGlobal('ORCA_TC', true)
+  })
+
+  it('reports the auto-updater as disabled', async () => {
+    const { isAutoUpdaterDisabled } = await import('./updater')
+    expect(isAutoUpdaterDisabled()).toBe(true)
+  })
+
+  it('setupAutoUpdater never loads electron-updater, pins a feed, or schedules checks', async () => {
+    const { setupAutoUpdater } = await import('./updater')
+    const mainWindow = { webContents: { send: vi.fn() } }
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+
+    expect(autoUpdaterMock.setFeedURL).not.toHaveBeenCalled()
+    expect(autoUpdaterMock.on).not.toHaveBeenCalled()
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+    expect(powerMonitorOnMock).not.toHaveBeenCalled()
+  })
+
+  it('checkForUpdatesFromMenu reports not-available without contacting the feed', async () => {
+    const { checkForUpdatesFromMenu } = await import('./updater')
+    const send = vi.fn()
+
+    checkForUpdatesFromMenu()
+
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+    expect(autoUpdaterMock.setFeedURL).not.toHaveBeenCalled()
+    void send
+  })
+
+  it('downloadUpdate and checkForUpdates no-op', async () => {
+    const { downloadUpdate, checkForUpdates } = await import('./updater')
+
+    downloadUpdate()
+    checkForUpdates()
+
+    expect(autoUpdaterMock.downloadUpdate).not.toHaveBeenCalled()
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+  })
+})

@@ -51,7 +51,7 @@ export function getDefaultUserDataPath(
     return process.env.ORCA_USER_DATA_PATH
   }
   if (platform === 'darwin') {
-    return join(homeDir, 'Library', 'Application Support', 'orca')
+    return join(homeDir, 'Library', 'Application Support', 'orca-tc')
   }
   if (platform === 'win32') {
     const appData = process.env.APPDATA
@@ -61,10 +61,11 @@ export function getDefaultUserDataPath(
         'APPDATA is not set, so the Orca runtime metadata path cannot be resolved.'
       )
     }
-    return join(appData, 'orca')
+    return join(appData, 'orca-tc')
   }
   // Why: the CLI must find the same metadata file Electron writes in packaged
   // runs, so this mirrors Electron's default userData base instead of inventing
-  // a CLI-specific config path.
-  return join(process.env.XDG_CONFIG_HOME || join(homeDir, '.config'), 'orca')
+  // a CLI-specific config path. Orca TC namespaces this from official Orca's
+  // `orca` dir so `orcatc` CLI commands never target official Orca's runtime.
+  return join(process.env.XDG_CONFIG_HOME || join(homeDir, '.config'), 'orca-tc')
 }

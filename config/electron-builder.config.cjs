@@ -57,8 +57,8 @@ const winSpeechNativeResource = {
 
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
-  appId: 'com.stablyai.orca',
-  productName: 'Orca',
+  appId: 'com.gfsaaser.orca-tc',
+  productName: 'Orca TC',
   directories: {
     buildResources: 'resources/build'
   },
@@ -190,7 +190,7 @@ module.exports = {
     }
   },
   win: {
-    executableName: 'Orca',
+    executableName: 'OrcaTC',
     // Why: Windows installers are signed after electron-builder packaging by
     // SignPath, so the packager cannot infer the updater publisherName.
     signtoolOptions: {
@@ -200,12 +200,12 @@ module.exports = {
       ...commonExtraResources,
       winSpeechNativeResource,
       {
-        from: 'resources/win32/bin/orca.cmd',
-        to: 'bin/orca.cmd'
+        from: 'resources/win32/bin/orcatc.cmd',
+        to: 'bin/orcatc.cmd'
       },
       {
         from: 'native/windows-cli-launcher/.build/orca.exe',
-        to: 'bin/orca.exe'
+        to: 'bin/orcatc.exe'
       },
       {
         from: 'node_modules/agent-browser/bin/agent-browser-win32-x64.exe',
@@ -219,7 +219,7 @@ module.exports = {
     ]
   },
   nsis: {
-    artifactName: 'orca-windows-setup.${ext}',
+    artifactName: 'orcatc-windows-setup.${ext}',
     shortcutName: '${productName}',
     uninstallDisplayName: '${productName}',
     createDesktopShortcut: 'always',
@@ -393,12 +393,11 @@ module.exports = {
   // on Intel Macs. The beforeBuild hook performs Orca's targeted rebuild and
   // returns false so electron-builder does not rebuild optional cpu-features.
   npmRebuild: true,
-  publish: {
-    provider: 'github',
-    owner: 'stablyai',
-    repo: 'orca',
-    releaseType: 'release'
-  }
+  // Why: Orca TC is a private side-by-side fork with no public release feed. The
+  // in-code updater is hard-gated off behind the ORCA_TC build define, and
+  // publish is neutralized here so electron-builder never emits or expects an
+  // official StablyAI GitHub release channel.
+  publish: null
 }
 
 function chmodUnixCliLaunchers(resourcesDir, electronPlatformName) {
