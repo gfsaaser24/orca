@@ -18,13 +18,13 @@ export type TcProxyLifecycle =
   | 'offline'
 
 /** Derived per-surface readiness (never gate UI on transport alone). */
-export interface TcReadiness {
+export type TcReadiness = {
   usageReady: boolean
   routingReady: boolean
   controlReady: boolean
 }
 
-export interface TcQuotaBucket {
+export type TcQuotaBucket = {
   /** 0–100, clamped; may have been >100 upstream (overage flag set). */
   usedPercent: number
   overage: boolean
@@ -35,7 +35,7 @@ export interface TcQuotaBucket {
   observedAt: number | null
 }
 
-export interface TcAccount {
+export type TcAccount = {
   /** Stable ID: teamclaude account UUID + organization (Phase-0 field). */
   id: string
   name: string
@@ -53,7 +53,7 @@ export interface TcAccount {
   }
 }
 
-export interface TcRoute {
+export type TcRoute = {
   name: string
   match: string[]
   /** Stable account IDs (names only during Phase-0 deprecation window). */
@@ -61,7 +61,7 @@ export interface TcRoute {
   bucket: string | null
 }
 
-export interface TcActivityRow {
+export type TcActivityRow = {
   /** `${bootId}:${eventId}` — stable dedupe key across proxy restarts. */
   key: string
   at: number
@@ -72,7 +72,7 @@ export interface TcActivityRow {
   path: string | null
 }
 
-export interface TcState {
+export type TcState = {
   lifecycle: TcProxyLifecycle
   readiness: TcReadiness
   /** Why setup is needed / spawn failed / degraded — user-facing, localized key + detail. */
@@ -107,7 +107,19 @@ export const TC_IPC = {
   /** invoke: ({confirmLiveSessions: number}) => void — count echoed back as consent */
   proxyStop: 'tc:proxy:stop',
   /** invoke: () => TcActivityRow[] — seed from /log */
-  logTail: 'tc:log:tail',
+  logTail: 'tc:log:tail'
 } as const
 
 export type TcAccountSetPayload = { id: string; disabled?: boolean; priority?: number }
+
+/** Shape of the preload bridge exposed at window.api.teamclaude. */
+export type TcBridge = {
+  onState(cb: (state: TcState) => void): () => void
+  onActivity(cb: (rows: TcActivityRow[]) => void): () => void
+  pin(accountId: string | null): Promise<void>
+  setRoutes(routes: TcRoute[]): Promise<void>
+  setAccount(payload: TcAccountSetPayload): Promise<void>
+  startProxy(): Promise<void>
+  stopProxy(payload: { confirmLiveSessions: number }): Promise<void>
+  logTail(): Promise<TcActivityRow[]>
+}

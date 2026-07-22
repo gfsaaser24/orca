@@ -24,7 +24,8 @@ import {
   clearMarkerFile,
   markerPath,
   processAlive,
-  processStartTime
+  processStartTime,
+  killProcess
 } from './supervisor-runtime'
 import { TeamclaudeClient, deriveReadiness, type TcStatusSnapshot } from './client'
 import { TeamclaudeControl } from './control'
@@ -59,12 +60,19 @@ class TeamclaudeService {
       proxyStart: async () => {
         await this.supervisor?.retry()
       },
-      proxyStop: async () => {
+      proxyStop: async (args) => {
+        // D5 consent audit trail: the renderer's stop confirmation echoes how many
+        // live sessions the user acknowledged would be cut. We DO proceed with the
+        // stop (the user already confirmed in the dialog), but we record the
+        // acknowledged count — in a log line and in the next pushed state's
+        // reasonDetail — so the destructive stop is auditable after the fact.
+        const confirmed = args?.confirmLiveSessions ?? 0
+        console.log(`[teamclaude] proxy stop requested (confirmLiveSessions=${confirmed})`)
         await this.supervisor?.stop({ killOwned: true })
         this.patchState({
           lifecycle: 'offline',
           reasonKey: 'tc.reason.stopped',
-          reasonDetail: null
+          reasonDetail: `stopped by user (acknowledged ${confirmed} live session${confirmed === 1 ? '' : 's'})`
         })
       },
       logTail: () => this.client?.seedActivity() ?? Promise.resolve([])
@@ -76,6 +84,17 @@ class TeamclaudeService {
     this.watcher.on('change', (next) => void this.onConfigChange(next))
     if (this.config) {
       await this.spinUp(this.config)
+    } else {
+      // D3: a missing/corrupt config file is "not set up yet", not a silent
+      // no-op. Push a setup-needed state with a guidance reasonKey so the cockpit
+      // renders the setup path instead of an indefinitely-blank surface. A config
+      // that later appears fires the watcher → onConfigChange → spinUp.
+      this.patchState({
+        lifecycle: 'setup-needed',
+        reasonKey: 'tc.reason.noConfig',
+        reasonDetail:
+          'TeamClaude is not configured yet — run `teamclaude` setup to create its config'
+      })
     }
   }
 
@@ -105,7 +124,13 @@ class TeamclaudeService {
     if (next) {
       await this.spinUp(next)
     } else {
-      this.patchState({ lifecycle: 'offline', reasonKey: 'tc.reason.noConfig', reasonDetail: null })
+      // Config disappeared/became unreadable at runtime → back to setup-needed
+      // (D3), consistent with a missing config at startup.
+      this.patchState({
+        lifecycle: 'setup-needed',
+        reasonKey: 'tc.reason.noConfig',
+        reasonDetail: 'TeamClaude configuration was removed — run `teamclaude` setup to recreate it'
+      })
     }
   }
 
@@ -221,6 +246,7 @@ function buildDeps(client: TeamclaudeClient, config: TcConnectionConfig): Superv
     writeMarker: (m) => writeMarkerFile(marker, m),
     clearMarker: () => clearMarkerFile(marker),
     processAlive,
+    killPid: killProcess,
     processStartTime,
     isSupported: (capabilities) => deriveReadiness(capabilities).routingReady,
     now: Date.now,

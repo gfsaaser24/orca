@@ -217,6 +217,29 @@ export function markerPath(userDataDir: string): string {
   return join(userDataDir, 'teamclaude-owned-proxy.json')
 }
 
+/** Force-kill a process tree by pid. Mirrors the spawned child's `kill()` (a
+ *  Windows `taskkill /T /F` tree kill; POSIX SIGTERM) so a RECLAIMED owned
+ *  server — which has no child handle — can still be stopped. */
+export function killProcess(pid: number): void {
+  if (process.platform === 'win32') {
+    try {
+      const tk = spawn('taskkill', ['/pid', String(pid), '/T', '/F'], {
+        stdio: 'ignore',
+        windowsHide: true
+      })
+      tk.on('error', () => {})
+    } catch {
+      /* taskkill unavailable */
+    }
+    return
+  }
+  try {
+    process.kill(pid)
+  } catch {
+    /* already gone / not signalable */
+  }
+}
+
 export function processAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)

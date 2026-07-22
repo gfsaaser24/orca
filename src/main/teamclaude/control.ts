@@ -59,15 +59,22 @@ export class TeamclaudeControl {
     return this.post('/teamclaude/oauth/login')
   }
 
-  /** Ensure MITM certs exist for the upstream and return the CA path (spec §3.3). */
+  /** Ensure MITM certs exist for the upstream and return the CA path (spec §3.3).
+   *  A SINGLE POST — cert generation is a real side effect (shared CONNECT cert
+   *  lock); issuing it twice raced the generation and doubled the work (D4). */
   async ensureCerts(): Promise<{ ok: boolean; caPath?: string; error?: string }> {
-    const res = await this.post('/teamclaude/certs/ensure')
-    if (!res.ok) {
-      return { ok: false, error: res.error }
+    const raw = await this.postRaw('/teamclaude/certs/ensure')
+    if (raw.error) {
+      return { ok: false, error: raw.error }
     }
-    // The body carries { caPath }; re-read it from the raw call.
-    const body = await this.postRaw('/teamclaude/certs/ensure')
-    const caPath = body.json && typeof body.json.caPath === 'string' ? body.json.caPath : undefined
+    const ok = raw.json && typeof raw.json.ok === 'boolean' ? raw.json.ok : raw.status2xx
+    if (!ok) {
+      const error =
+        (raw.json && typeof raw.json.error === 'string' && raw.json.error) ||
+        `Proxy /teamclaude/certs/ensure responded ${raw.status ?? '(no status)'}`
+      return { ok: false, error }
+    }
+    const caPath = raw.json && typeof raw.json.caPath === 'string' ? raw.json.caPath : undefined
     return caPath ? { ok: true, caPath } : { ok: false, error: 'certs/ensure returned no caPath' }
   }
 

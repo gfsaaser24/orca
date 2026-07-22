@@ -231,6 +231,7 @@ import {
   TC_IPC,
   type TcAccountSetPayload,
   type TcActivityRow,
+  type TcBridge,
   type TcRoute,
   type TcState
 } from '../shared/teamclaude-types'
@@ -4549,11 +4550,13 @@ const api = {
     pin: (accountId: string | null) => ipcRenderer.invoke(TC_IPC.pin, accountId),
     setRoutes: (routes: TcRoute[]) => ipcRenderer.invoke(TC_IPC.routesSet, routes),
     setAccount: (payload: TcAccountSetPayload) => ipcRenderer.invoke(TC_IPC.accountSet, payload),
-    proxyStart: () => ipcRenderer.invoke(TC_IPC.proxyStart),
-    proxyStop: (args: { confirmLiveSessions: number }) =>
+    // Bridge method names match the renderer's verified hook (startProxy/stopProxy);
+    // the underlying IPC channels stay TC_IPC.proxyStart/proxyStop.
+    startProxy: () => ipcRenderer.invoke(TC_IPC.proxyStart),
+    stopProxy: (args: { confirmLiveSessions: number }) =>
       ipcRenderer.invoke(TC_IPC.proxyStop, args),
     logTail: () => ipcRenderer.invoke(TC_IPC.logTail)
-  } satisfies PreloadApi['teamclaude']
+  } satisfies PreloadApi['teamclaude'] satisfies TcBridge
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

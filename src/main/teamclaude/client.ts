@@ -16,16 +16,19 @@ import { EventEmitter } from 'node:events'
 import type { TcActivityRow } from '../../shared/teamclaude-types'
 import {
   ActivityDeduper,
+  LiveStreamDeduper,
+  parseRoutes,
   parseStatus,
   type RawHello,
   type RawEvent,
   type RawLog,
+  type RawRoutesResponse,
   type RawStatus,
   type TcStatusSnapshot
 } from './client-mapping'
 
 // Re-export the mapping surface so consumers (and tests) import from ./client.
-export { ActivityDeduper, deriveReadiness } from './client-mapping'
+export { ActivityDeduper, LiveStreamDeduper, deriveReadiness } from './client-mapping'
 export type { TcStatusSnapshot, TcRawEvent } from './client-mapping'
 
 export type TcClientEvents = {
@@ -55,8 +58,12 @@ export class TeamclaudeClient extends EventEmitter {
   private pollTimer: NodeJS.Timeout | null = null
   private sseDisconnect: (() => void) | null = null
   private stopped = false
-  /** Per-bootId high-water eventId for dedupe across replays + restarts. */
+  /** Per-bootId high-water eventId for dedupe across replays + restarts.
+   *  Shared by the /log seed and the SSE live stream so neither double-emits. */
   private readonly deduper = new ActivityDeduper()
+  /** SSE live-stream dedupe: remembers the hello's bootId per connection and
+   *  keys the subsequent (bootId-less) live events under it. */
+  private readonly liveStream = new LiveStreamDeduper(this.deduper)
 
   constructor(opts: ClientOptions) {
     super()
@@ -138,7 +145,9 @@ export class TeamclaudeClient extends EventEmitter {
     }
     try {
       const raw = await this.json<RawStatus>('/teamclaude/status')
-      this.emit('status', parseStatus(raw))
+      const snapshot = parseStatus(raw)
+      await this.overrideRoutesIfReady(snapshot)
+      this.emit('status', snapshot)
     } catch (error) {
       this.emit('pollError', error as Error)
     }
@@ -147,6 +156,21 @@ export class TeamclaudeClient extends EventEmitter {
   /** One-shot status read (used by the supervisor probe / adopt handshake). */
   async fetchStatus(): Promise<TcStatusSnapshot> {
     return parseStatus(await this.json<RawStatus>('/teamclaude/status'))
+  }
+
+  /** /status.routes is the read-only display view (auto rows + {name,eligible}
+   *  objects). When routingReady, replace it with the editable source of truth
+   *  from GET /teamclaude/routes; on failure keep the display fallback. */
+  private async overrideRoutesIfReady(snapshot: TcStatusSnapshot): Promise<void> {
+    if (!snapshot.readiness.routingReady) {
+      return
+    }
+    try {
+      const raw = await this.json<RawRoutesResponse>('/teamclaude/routes')
+      snapshot.routes = parseRoutes(raw)
+    } catch {
+      /* keep the display fallback from parseStatus */
+    }
   }
 
   // --- /log seed ----------------------------------------------------------
@@ -186,6 +210,10 @@ export class TeamclaudeClient extends EventEmitter {
       if (this.stopped) {
         return
       }
+      // New connection: forget the last hello's bootId until this connection's
+      // hello re-arms it (a reconnect that keeps the same bootId is deduped by
+      // the ring high-water; a restart with a new bootId re-seeds cleanly).
+      this.liveStream.reset()
       req = http.get(
         {
           host: '127.0.0.1',
@@ -235,16 +263,18 @@ export class TeamclaudeClient extends EventEmitter {
     }
     if (isHello) {
       const hello = data as RawHello
-      // A fresh hello may carry a new bootId + capability/version refresh; the
-      // status poll owns those, but the replay ring is delivered here.
-      const rows = this.deduper.ingest(hello.bootId ?? null, hello.recent ?? hello.events ?? [])
+      // The hello carries this connection's bootId (live events do NOT); remember
+      // it for the connection and ingest the replay ring. The status poll owns
+      // the capability/version refresh.
+      const rows = this.liveStream.hello(hello.bootId ?? null, hello.recent ?? hello.events ?? [])
       if (rows.length) {
         this.emit('activity', rows)
       }
       return
     }
+    // Live event: no bootId on the wire — key it under the hello's bootId.
     const evt = data as RawEvent
-    const rows = this.deduper.ingest(evt.bootId ?? null, [evt])
+    const rows = this.liveStream.live(evt)
     if (rows.length) {
       this.emit('activity', rows)
     }

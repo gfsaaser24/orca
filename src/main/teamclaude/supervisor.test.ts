@@ -34,6 +34,7 @@ type Harness = {
   fireNext: () => Promise<void>
   markerStore: { current: OwnershipMarker | null }
   child: { exit: (code: number | null) => void; kill: ReturnType<typeof vi.fn> } | null
+  killPid: ReturnType<typeof vi.fn>
 }
 
 function makeHarness(
@@ -42,6 +43,7 @@ function makeHarness(
 ): Harness {
   const scheduled: (() => void)[] = []
   const markerStore = { current: initialMarker }
+  const killPid = vi.fn()
   const harness: Harness = {
     supervisor: null as unknown as Supervisor,
     deps: null as unknown as SupervisorDeps,
@@ -55,7 +57,8 @@ function makeHarness(
       await flush()
     },
     markerStore,
-    child: null
+    child: null,
+    killPid
   }
 
   let exitCb: (code: number | null) => void = () => {}
@@ -77,6 +80,7 @@ function makeHarness(
     writeMarker: (m) => (markerStore.current = m),
     clearMarker: () => (markerStore.current = null),
     processAlive: () => true,
+    killPid,
     processStartTime: async () => 1000,
     isSupported: (caps) => caps.includes('routing'),
     now: () => 5000,
@@ -193,6 +197,36 @@ describe('Supervisor state machine', () => {
     const h = makeHarness({ probe: vi.fn(async () => upProbe()) }, marker)
     await h.supervisor.start()
     expect(h.supervisor.state).toBe('adopted')
+  })
+
+  it('D1: reclaimed-owned server is killed by its marker pid on stop({killOwned})', async () => {
+    const marker: OwnershipMarker = { pid: 777, port: 3456, startedAt: 1000 }
+    // Same start time at reclaim AND at stop → provably ours both times.
+    const h = makeHarness(
+      { probe: vi.fn(async () => upProbe()), processStartTime: async () => 2500 },
+      marker
+    )
+    await h.supervisor.start()
+    expect(h.supervisor.state).toBe('owned')
+    expect(h.deps.spawnServer).not.toHaveBeenCalled() // reclaimed: no child handle
+    await h.supervisor.stop({ killOwned: true })
+    expect(h.killPid).toHaveBeenCalledWith(777)
+    expect(h.markerStore.current).toBeNull()
+  })
+
+  it('D1: reclaimed-owned + stale/mismatched start time on stop → NO kill', async () => {
+    const marker: OwnershipMarker = { pid: 777, port: 3456, startedAt: 1000 }
+    const startTime = vi.fn(async () => 2500)
+    startTime.mockResolvedValueOnce(2500) // reclaim: |2500-1000| = 1500 ≤ 2000 → ours
+    startTime.mockResolvedValueOnce(9000) // stop:    |9000-1000| = 8000 > 2000 → impostor
+    const h = makeHarness(
+      { probe: vi.fn(async () => upProbe()), processStartTime: startTime },
+      marker
+    )
+    await h.supervisor.start()
+    expect(h.supervisor.state).toBe('owned')
+    await h.supervisor.stop({ killOwned: true })
+    expect(h.killPid).not.toHaveBeenCalled()
   })
 
   it('gives up to offline after the backoff cap when spawns keep failing', async () => {

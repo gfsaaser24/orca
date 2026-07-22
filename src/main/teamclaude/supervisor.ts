@@ -138,15 +138,43 @@ export class Supervisor extends EventEmitter {
     this.generation++
     this.timers.clearAll()
     this.invalidateSnapshot()
-    if (opts?.killOwned && this.owned && this.child) {
-      try {
-        this.child.kill()
-      } catch {
-        /* best-effort */
+    if (opts?.killOwned && this.owned) {
+      if (this.child) {
+        // Spawned-owned: we hold the child handle.
+        try {
+          this.child.kill()
+        } catch {
+          /* best-effort */
+        }
+        this.deps.clearMarker()
+      } else {
+        // Reclaimed-owned: the detached server has no child handle, so kill it by
+        // the marker pid — but only after re-validating its start time so we can
+        // never kill a PID-recycled impostor squatting the old port.
+        await this.killOwnedByMarker()
       }
-      this.deps.clearMarker()
     }
     this.child = null
+  }
+
+  /** Kill a reclaimed-owned server by its ownership-marker pid, gated on the same
+   *  ±2s process-start-time proof used for reclaim. A stale/mismatched marker →
+   *  NO kill (the pid may have been recycled by an unrelated process). */
+  private async killOwnedByMarker(): Promise<void> {
+    const marker = this.deps.readMarker()
+    if (!marker || marker.port !== this.port) {
+      return
+    }
+    if (!this.deps.processAlive(marker.pid)) {
+      return
+    }
+    const started = await this.deps.processStartTime(marker.pid)
+    if (started === null || Math.abs(started - marker.startedAt) > RECLAIM_TOLERANCE_MS) {
+      // Not provably ours — leave it alone.
+      return
+    }
+    this.deps.killPid(marker.pid)
+    this.deps.clearMarker()
   }
 
   // --- core flow ----------------------------------------------------------

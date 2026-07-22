@@ -25,8 +25,8 @@ export type TeamclaudeApi = {
   pin: (accountId: string | null) => Promise<TeamclaudeControlResult>
   setRoutes: (routes: TcRoute[]) => Promise<TeamclaudeControlResult>
   setAccount: (payload: TcAccountSetPayload) => Promise<TeamclaudeControlResult>
-  proxyStart: () => Promise<void>
-  proxyStop: (args: { confirmLiveSessions: number }) => Promise<void>
+  startProxy: () => Promise<void>
+  stopProxy: (args: { confirmLiveSessions: number }) => Promise<void>
   logTail: () => Promise<TcActivityRow[]>
 }
 import type {

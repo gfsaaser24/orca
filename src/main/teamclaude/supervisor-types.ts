@@ -6,9 +6,10 @@
 import type { TcProxyLifecycle } from '../../shared/teamclaude-types'
 
 /** Distinct exit code teamclaude `server --headless` uses to signal "no
- *  accounts configured" so a supervisor classifies setup-needed vs crash
- *  (spec §3.7). Coordinated with Phase 0 — EX_CONFIG (sysexits.h). */
-export const NO_ACCOUNTS_EXIT_CODE = 78
+ *  accounts configured" so a supervisor classifies setup-needed vs crash. This
+ *  is the REAL server value (`process.exit(3)` in teamclaude src/index.js), not
+ *  the sysexits.h EX_CONFIG (78) the spec draft assumed. */
+export const NO_ACCOUNTS_EXIT_CODE = 3
 
 /** Backoff attempts before the supervisor gives up to `offline`. */
 export const BACKOFF_CAP = 5
@@ -67,6 +68,9 @@ export type SupervisorDeps = {
   clearMarker(): void
   /** True if a process with this pid is alive. */
   processAlive(pid: number): boolean
+  /** Force-kill a process tree by pid (used to stop a RECLAIMED owned server,
+   *  which has no child handle). */
+  killPid(pid: number): void
   /** OS process start time (epoch ms) or null if unknowable. */
   processStartTime(pid: number): Promise<number | null>
   /** Whether the server's capabilities/version are supported (else degraded). */
