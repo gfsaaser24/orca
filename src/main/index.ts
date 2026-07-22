@@ -25,6 +25,7 @@ import { CodexUsageStore, initCodexUsagePath } from './codex-usage/store'
 import { OpenCodeUsageStore, initOpenCodeUsagePath } from './opencode-usage/store'
 import { killAllPty } from './ipc/pty'
 import { initDaemonPtyProvider, disconnectDaemon, shutdownDaemon } from './daemon/daemon-init'
+import { initTeamclaude } from './teamclaude/init'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
@@ -2253,6 +2254,11 @@ app.whenReady().then(async () => {
   registerMobileHandlers(runtimeRpc, { getRelayStatus: () => desktopRelayStatus })
 
   startTerminalRuntimeStartupServices()
+  // Why: TeamClaude adopt-or-spawn supervisor + fleet client is an app-lifetime
+  // singleton (spec §4 module lifecycle). Initialize once here on the
+  // app-lifetime path — never from attachMainWindowServices, which re-runs on
+  // window recreation and would duplicate SSE connections/spawns/marker churn.
+  initTeamclaude()
   app.on('activate', requestDesktopActivation)
 
   if (serveOptions) {

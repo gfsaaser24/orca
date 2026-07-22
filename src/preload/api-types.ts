@@ -10,6 +10,26 @@ import type {
 } from '../shared/hosted-review'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type {
+  TcAccountSetPayload,
+  TcActivityRow,
+  TcRoute,
+  TcState
+} from '../shared/teamclaude-types'
+
+/** Typed result of a TeamClaude control-plane mutation (never throws). */
+export type TeamclaudeControlResult = { ok: boolean; error?: string; status?: number }
+
+export type TeamclaudeApi = {
+  onState: (callback: (state: TcState) => void) => () => void
+  onActivity: (callback: (rows: TcActivityRow[]) => void) => () => void
+  pin: (accountId: string | null) => Promise<TeamclaudeControlResult>
+  setRoutes: (routes: TcRoute[]) => Promise<TeamclaudeControlResult>
+  setAccount: (payload: TcAccountSetPayload) => Promise<TeamclaudeControlResult>
+  proxyStart: () => Promise<void>
+  proxyStop: (args: { confirmLiveSessions: number }) => Promise<void>
+  logTail: () => Promise<TcActivityRow[]>
+}
+import type {
   TerminalTabCloseRequest,
   TerminalTabCloseResponse
 } from '../shared/terminal-tab-close'
@@ -3314,6 +3334,7 @@ export type PreloadApi = {
     onStopped: (callback: (data: SpeechLifecycleEvent) => void) => () => void
     onError: (callback: (data: SpeechErrorEvent) => void) => () => void
   }
+  teamclaude: TeamclaudeApi
 }
 
 declare global {
