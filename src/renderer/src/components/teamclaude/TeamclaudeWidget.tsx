@@ -42,7 +42,10 @@ export const TeamclaudeWidget = React.forwardRef<HTMLButtonElement, TeamclaudeWi
     const worst = account ? worstBucket(account) : null
 
     const statusLabel = gates.offline
-      ? t('teamclaude.lifecycle.offline', 'Offline')
+      ? // Why (offline degradation matrix, spec §5): with the proxy down, claude
+        // launches run direct/unrouted — the ambient widget says exactly that
+        // (grey dot via lifecycleDotColor + "direct"), not a bare "Offline".
+        t('teamclaude.widget.direct', 'direct')
       : gates.setupNeeded
         ? t('teamclaude.lifecycle.setupNeeded', 'Setup needed')
         : gates.adoptedDegraded

@@ -6,23 +6,59 @@ import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
 import { Checkbox } from '../../ui/checkbox'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../ui/tooltip'
 import type { TcAccount, TcState } from '../../../../../shared/teamclaude-types'
 import type { TeamclaudeControls } from '@/hooks/useTeamclaude'
 import { ErrorBadge, STATUS_LABELS, StateDot, ThrottleBadge } from '../teamclaude-atoms'
-import { surfaceGates } from '../teamclaude-model'
+import { surfaceGates, TC_MIN_SERVER_VERSION } from '../teamclaude-model'
 
 // Why: account administration — pin, disable, and priority. All mutations flow
 // through the injected controls (tc:pin / tc:account:set) and are disabled when
-// the control surface is not ready (never gated on raw transport).
+// the control surface is not ready (never gated on raw transport). When a
+// control is disabled, the specific reason rides a per-control tooltip (with a
+// native `title` accessible fallback for pointer-less / disabled targets)
+// instead of a single generic banner.
+
+/**
+ * Wrap a disabled control so its reason surfaces on hover/focus. When enabled,
+ * renders the control untouched. The wrapper span (not the disabled control)
+ * receives pointer events so the tooltip still opens over a disabled target, and
+ * `title` carries the same text as an always-available accessible fallback.
+ */
+function DisabledReason({
+  reason,
+  disabled,
+  children
+}: {
+  reason: string
+  disabled: boolean
+  children: React.ReactNode
+}): React.JSX.Element {
+  if (!disabled) {
+    return <>{children}</>
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex" title={reason}>
+          {children}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{reason}</TooltipContent>
+    </Tooltip>
+  )
+}
 
 function AccountRow({
   account,
   controls,
-  enabled
+  enabled,
+  disabledReason
 }: {
   account: TcAccount
   controls: TeamclaudeControls
   enabled: boolean
+  disabledReason: string
 }): React.JSX.Element {
   const { t } = useTranslation()
   const disabled = account.status === 'disabled'
@@ -45,48 +81,54 @@ function AccountRow({
         <Label htmlFor={`tc-priority-${account.id}`} className="text-xs text-muted-foreground">
           {t('teamclaude.accounts.priority', 'Priority')}
         </Label>
-        <Input
-          id={`tc-priority-${account.id}`}
-          type="number"
-          value={account.priority}
-          disabled={!enabled}
-          className="h-7 w-16"
-          onChange={(event) => {
-            const priority = Number.parseInt(event.target.value, 10)
-            if (!Number.isNaN(priority)) {
-              controls.setAccount({ id: account.id, priority })
-            }
-          }}
-        />
+        <DisabledReason reason={disabledReason} disabled={!enabled}>
+          <Input
+            id={`tc-priority-${account.id}`}
+            type="number"
+            value={account.priority}
+            disabled={!enabled}
+            className="h-7 w-16"
+            onChange={(event) => {
+              const priority = Number.parseInt(event.target.value, 10)
+              if (!Number.isNaN(priority)) {
+                controls.setAccount({ id: account.id, priority })
+              }
+            }}
+          />
+        </DisabledReason>
       </div>
 
-      <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Checkbox
-          checked={disabled}
-          disabled={!enabled}
-          onCheckedChange={(checked) =>
-            controls.setAccount({ id: account.id, disabled: checked === true })
-          }
-          aria-label={t('teamclaude.accounts.disable', 'Disable {{value0}}', {
-            value0: account.name
-          })}
-        />
-        {t('teamclaude.accounts.disabled', 'Disabled')}
-      </label>
+      <DisabledReason reason={disabledReason} disabled={!enabled}>
+        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Checkbox
+            checked={disabled}
+            disabled={!enabled}
+            onCheckedChange={(checked) =>
+              controls.setAccount({ id: account.id, disabled: checked === true })
+            }
+            aria-label={t('teamclaude.accounts.disable', 'Disable {{value0}}', {
+              value0: account.name
+            })}
+          />
+          {t('teamclaude.accounts.disabled', 'Disabled')}
+        </label>
+      </DisabledReason>
 
-      <Button
-        size="icon-sm"
-        variant={account.pinned ? 'secondary' : 'ghost'}
-        disabled={!enabled}
-        onClick={() => controls.pin(account.pinned ? null : account.id)}
-        aria-label={
-          account.pinned
-            ? t('teamclaude.flyout.unpin', 'Unpin {{value0}}', { value0: account.name })
-            : t('teamclaude.flyout.pin', 'Pin {{value0}}', { value0: account.name })
-        }
-      >
-        {account.pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
-      </Button>
+      <DisabledReason reason={disabledReason} disabled={!enabled}>
+        <Button
+          size="icon-sm"
+          variant={account.pinned ? 'secondary' : 'ghost'}
+          disabled={!enabled}
+          onClick={() => controls.pin(account.pinned ? null : account.id)}
+          aria-label={
+            account.pinned
+              ? t('teamclaude.flyout.unpin', 'Unpin {{value0}}', { value0: account.name })
+              : t('teamclaude.flyout.pin', 'Pin {{value0}}', { value0: account.name })
+          }
+        >
+          {account.pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+        </Button>
+      </DisabledReason>
     </div>
   )
 }
@@ -102,6 +144,17 @@ export function AccountsTab({
   const gates = surfaceGates(state)
   const accounts = state?.accounts ?? []
 
+  // Why: an old (adopted-degraded) server lacks the control capability — the fix
+  // is an upgrade, so name the concrete have/need versions. Plain offline / other
+  // read-only states keep the generic reason since upgrading would not help.
+  const disabledReason = gates.adoptedDegraded
+    ? t(
+        'teamclaude.accounts.updateNeeded',
+        'Update teamclaude to manage accounts (have v{{have}}, need v{{need}}).',
+        { have: state?.serverVersion ?? '?', need: TC_MIN_SERVER_VERSION }
+      )
+    : t('teamclaude.accounts.readOnly', 'Account controls are unavailable in this state.')
+
   if (accounts.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
@@ -111,20 +164,18 @@ export function AccountsTab({
   }
 
   return (
-    <div className="flex flex-col">
-      {!gates.controlsEnabled ? (
-        <p className="mb-2 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
-          {t('teamclaude.accounts.readOnly', 'Account controls are unavailable in this state.')}
-        </p>
-      ) : null}
-      {accounts.map((account) => (
-        <AccountRow
-          key={account.id}
-          account={account}
-          controls={controls}
-          enabled={gates.controlsEnabled}
-        />
-      ))}
-    </div>
+    <TooltipProvider>
+      <div className="flex flex-col">
+        {accounts.map((account) => (
+          <AccountRow
+            key={account.id}
+            account={account}
+            controls={controls}
+            enabled={gates.controlsEnabled}
+            disabledReason={disabledReason}
+          />
+        ))}
+      </div>
+    </TooltipProvider>
   )
 }

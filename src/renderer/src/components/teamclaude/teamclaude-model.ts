@@ -11,6 +11,17 @@ import type {
 
 export type BucketKey = 'unified5h' | 'unified7d' | 'unified7dFable' | 'unified7dSonnet'
 
+/**
+ * Minimum TeamClaude server version Orca TC's cockpit requires for full
+ * routing/control capabilities (the Phase-0 status/hello envelope + mutation
+ * endpoints — spec §3/§9 "version floor constant"). Attaching to an older
+ * server lands in `adopted-degraded`, and the affected tabs surface an
+ * "update teamclaude (have vX, need vY)" prompt built from this value and
+ * `state.serverVersion`. Lives here (with the readiness derivation) rather than
+ * in the frozen contract so it can move without a contract rev.
+ */
+export const TC_MIN_SERVER_VERSION = '1.5.0'
+
 /** Render order for per-account quota bars. */
 export const BUCKET_KEYS: readonly BucketKey[] = [
   'unified5h',
@@ -177,11 +188,14 @@ export function isActivityRowPending(row: TcActivityRow): boolean {
 }
 
 /**
- * Best-effort live-session count for the stop-proxy confirmation consent echo.
- * Derived from in-flight (pending) activity rows since the frozen v2.2 contract
- * carries no explicit live-session field. See report deviation note.
+ * Count of in-flight (pending) requests — a request-level heuristic derived from
+ * activity rows whose status/duration are not yet known. Named honestly: this is
+ * NOT a session count. The frozen v2.2 contract carries no explicit live-session
+ * field, so the stop-proxy confirmation echoes THIS request count as consent and
+ * its copy speaks of "in-flight requests", never sessions. The IPC payload field
+ * stays `confirmLiveSessions` (frozen); only the human-facing framing is truthful.
  */
-export function liveSessionCount(activity: readonly TcActivityRow[]): number {
+export function inFlightRequestCount(activity: readonly TcActivityRow[]): number {
   return activity.reduce((count, row) => (isActivityRowPending(row) ? count + 1 : count), 0)
 }
 

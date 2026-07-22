@@ -10,9 +10,9 @@ import type {
 } from '../../../../shared/teamclaude-types'
 import {
   hasLaunchedUnrouted,
+  inFlightRequestCount,
   isActivityRowPending,
   isBucketStale,
-  liveSessionCount,
   mergeActivity,
   primaryAccount,
   resetCountdownMs,
@@ -217,9 +217,9 @@ describe('activity helpers', () => {
     expect(isActivityRowPending(row({}))).toBe(false)
   })
 
-  it('counts live sessions from in-flight rows', () => {
+  it('counts in-flight requests from pending rows', () => {
     expect(
-      liveSessionCount([
+      inFlightRequestCount([
         row({ key: 'b:1', status: null }),
         row({ key: 'b:2' }),
         row({ key: 'b:3', durationMs: null })

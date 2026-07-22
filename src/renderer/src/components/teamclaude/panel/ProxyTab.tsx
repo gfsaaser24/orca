@@ -16,12 +16,13 @@ import type {
   TcState
 } from '../../../../../shared/teamclaude-types'
 import type { TeamclaudeControls } from '@/hooks/useTeamclaude'
-import { liveSessionCount, surfaceGates } from '../teamclaude-model'
+import { inFlightRequestCount, surfaceGates } from '../teamclaude-model'
 
 // Why: proxy lifecycle surface. Distinguishes owned vs adopted supervisors,
 // guides setup-needed states with the localized reason, and guards Stop behind
-// a confirmation that echoes the live-session count back as consent
-// (tc:proxy:stop { confirmLiveSessions }).
+// a confirmation that echoes the in-flight request count back as consent. The
+// IPC field stays `confirmLiveSessions` (frozen contract), but the count is a
+// request-level heuristic and the copy says "in-flight requests", not sessions.
 
 const LIFECYCLE_LABELS: Record<TcProxyLifecycle, { key: string; fallback: string }> = {
   probing: { key: 'teamclaude.lifecycle.probing', fallback: 'Probing' },
@@ -34,12 +35,12 @@ const LIFECYCLE_LABELS: Record<TcProxyLifecycle, { key: string; fallback: string
 
 function StopConfirmDialog({
   open,
-  liveSessions,
+  inFlight,
   onCancel,
   onConfirm
 }: {
   open: boolean
-  liveSessions: number
+  inFlight: number
   onCancel: () => void
   onConfirm: () => void
 }): React.JSX.Element {
@@ -50,15 +51,15 @@ function StopConfirmDialog({
         <DialogHeader>
           <DialogTitle>{t('teamclaude.proxy.stopTitle', 'Stop the proxy?')}</DialogTitle>
           <DialogDescription>
-            {liveSessions > 0
+            {inFlight > 0
               ? t(
-                  'teamclaude.proxy.stopBodyLive',
-                  'Stopping the proxy will interrupt {{value0}} live session(s) currently routing through it.',
-                  { value0: liveSessions }
+                  'teamclaude.proxy.stopBodyInFlight',
+                  'Stopping the proxy will interrupt {{value0}} in-flight request(s) currently routing through it.',
+                  { value0: inFlight }
                 )
               : t(
                   'teamclaude.proxy.stopBodyIdle',
-                  'No sessions are currently routing through the proxy.'
+                  'No requests are currently in flight through the proxy.'
                 )}
           </DialogDescription>
         </DialogHeader>
@@ -88,7 +89,7 @@ export function ProxyTab({
   const gates = surfaceGates(state)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const lifecycle = state?.lifecycle ?? 'offline'
-  const liveSessions = liveSessionCount(activity)
+  const inFlight = inFlightRequestCount(activity)
 
   const label = LIFECYCLE_LABELS[lifecycle]
 
@@ -112,8 +113,8 @@ export function ProxyTab({
           <dd className="text-right tabular-nums text-foreground">{state?.port ?? '—'}</dd>
           <dt>{t('teamclaude.proxy.serverVersion', 'Server version')}</dt>
           <dd className="text-right text-foreground">{state?.serverVersion ?? '—'}</dd>
-          <dt>{t('teamclaude.proxy.liveSessions', 'Live sessions')}</dt>
-          <dd className="text-right tabular-nums text-foreground">{liveSessions}</dd>
+          <dt>{t('teamclaude.proxy.inFlightRequests', 'In-flight requests')}</dt>
+          <dd className="text-right tabular-nums text-foreground">{inFlight}</dd>
         </dl>
       </div>
 
@@ -150,11 +151,11 @@ export function ProxyTab({
 
       <StopConfirmDialog
         open={confirmOpen}
-        liveSessions={liveSessions}
+        inFlight={inFlight}
         onCancel={() => setConfirmOpen(false)}
         onConfirm={() => {
           setConfirmOpen(false)
-          controls.stopProxy(liveSessions)
+          controls.stopProxy(inFlight)
         }}
       />
     </div>

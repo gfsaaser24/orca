@@ -9,6 +9,7 @@ import { AccountsTab } from './panel/AccountsTab'
 import { RoutesTab } from './panel/RoutesTab'
 import { ActivityTab } from './panel/ActivityTab'
 import { ProxyTab } from './panel/ProxyTab'
+import { surfaceGates } from './teamclaude-model'
 
 // Why: the full management surface. A tabbed dialog keeping the four cockpit
 // concerns (accounts, routes, activity, proxy) in one place; each tab is its
@@ -30,6 +31,7 @@ export function TeamclaudePanel({
   controls
 }: TeamclaudePanelProps): React.JSX.Element {
   const { t } = useTranslation()
+  const gates = surfaceGates(state)
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
@@ -50,7 +52,7 @@ export function TeamclaudePanel({
             <RoutesTab state={state} controls={controls} />
           </TabsContent>
           <TabsContent value="activity">
-            <ActivityTab activity={activity} />
+            <ActivityTab activity={activity} offline={gates.offline} />
           </TabsContent>
           <TabsContent value="proxy">
             <ProxyTab state={state} activity={activity} controls={controls} />

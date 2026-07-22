@@ -7,7 +7,7 @@ import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
 import type { TcRoute, TcState } from '../../../../../shared/teamclaude-types'
 import type { TeamclaudeControls } from '@/hooks/useTeamclaude'
-import { surfaceGates } from '../teamclaude-model'
+import { surfaceGates, TC_MIN_SERVER_VERSION } from '../teamclaude-model'
 
 // Why: the glob→accounts routing editor. Edits are staged locally and committed
 // as one tc:routes:set on Apply, so partial keystrokes never push malformed
@@ -24,10 +24,19 @@ type DraftRoute = {
   name: string
   match: string
   accounts: string
+  // Why: the editor exposes name/match/accounts, but `bucket` is a real routing
+  // field the UI does not (yet) edit. Carry it verbatim through the draft so
+  // Apply round-trips it instead of silently wiping it from existing routes.
+  bucket: string | null
 }
 
 function toDraft(route: TcRoute): DraftRoute {
-  return { name: route.name, match: route.match.join(', '), accounts: route.accounts.join(', ') }
+  return {
+    name: route.name,
+    match: route.match.join(', '),
+    accounts: route.accounts.join(', '),
+    bucket: route.bucket
+  }
 }
 
 function fromDraft(draft: DraftRoute): TcRoute {
@@ -35,7 +44,7 @@ function fromDraft(draft: DraftRoute): TcRoute {
     name: draft.name,
     match: toList(draft.match),
     accounts: toList(draft.accounts),
-    bucket: null
+    bucket: draft.bucket
   }
 }
 
@@ -63,13 +72,25 @@ export function RoutesTab({
     setDrafts((prev) => prev.map((draft, i) => (i === index ? { ...draft, ...patch } : draft)))
   }
 
+  // Why: an old (adopted-degraded) server is missing the routing capability, so
+  // the fix is an upgrade, not a state to wait out — surface the concrete
+  // have/need versions. Plain offline / other read-only states keep the generic
+  // copy since upgrading would not help.
+  const disabledReason = gates.adoptedDegraded
+    ? t(
+        'teamclaude.routes.updateNeeded',
+        'Update teamclaude to edit routes (have v{{have}}, need v{{need}}).',
+        { have: state?.serverVersion ?? '?', need: TC_MIN_SERVER_VERSION }
+      )
+    : gates.routingDegraded
+      ? t('teamclaude.routes.degraded', 'This proxy does not support routing edits.')
+      : t('teamclaude.routes.readOnly', 'Routing is unavailable in this state.')
+
   return (
     <div className="flex flex-col gap-3">
       {!enabled ? (
         <p className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
-          {gates.routingDegraded
-            ? t('teamclaude.routes.degraded', 'This proxy does not support routing edits.')
-            : t('teamclaude.routes.readOnly', 'Routing is unavailable in this state.')}
+          {disabledReason}
         </p>
       ) : null}
 
@@ -128,7 +149,9 @@ export function RoutesTab({
           size="sm"
           variant="outline"
           disabled={!enabled}
-          onClick={() => setDrafts((prev) => [...prev, { name: '', match: '', accounts: '' }])}
+          onClick={() =>
+            setDrafts((prev) => [...prev, { name: '', match: '', accounts: '', bucket: null }])
+          }
         >
           <Plus className="size-3.5" />
           {t('teamclaude.routes.add', 'Add route')}

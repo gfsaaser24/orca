@@ -88,9 +88,11 @@ describe('TeamclaudeWidget', () => {
     expect(container.textContent).not.toContain('72%')
   })
 
-  it('shows an offline label when offline and for null state', () => {
+  it('shows a "direct" label when offline and no bars for null state', () => {
     render(makeState('offline', READY))
-    expect(container.textContent).toContain('Offline')
+    // Offline degradation matrix (spec §5): grey dot + "direct", not "Offline".
+    expect(container.textContent).toContain('direct')
+    expect(container.textContent).not.toContain('Offline')
     render(null)
     expect(container.querySelector('[role="progressbar"]')).toBeNull()
   })

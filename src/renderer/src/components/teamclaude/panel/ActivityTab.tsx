@@ -68,7 +68,25 @@ function ActivityRowView({ row }: { row: TcActivityRow }): React.JSX.Element {
   )
 }
 
-export function ActivityTab({ activity }: { activity: TcActivityRow[] }): React.JSX.Element {
+// Why: retained history stays visible while the proxy is offline; a banner (not
+// a blank/replaced view) tells the reader the feed is frozen. `offline` comes
+// from the parent's surfaceGates so this presentational tab never touches state.
+function OfflineBanner(): React.JSX.Element {
+  const { t } = useTranslation()
+  return (
+    <p className="mb-2 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+      {t('teamclaude.activity.offlineBanner', 'Proxy offline — showing recent activity.')}
+    </p>
+  )
+}
+
+export function ActivityTab({
+  activity,
+  offline = false
+}: {
+  activity: TcActivityRow[]
+  offline?: boolean
+}): React.JSX.Element {
   const { t } = useTranslation()
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const virtualizer = useVirtualizer({
@@ -81,9 +99,12 @@ export function ActivityTab({ activity }: { activity: TcActivityRow[] }): React.
 
   if (activity.length === 0) {
     return (
-      <p className="py-8 text-center text-sm text-muted-foreground">
-        {t('teamclaude.activity.empty', 'No activity yet.')}
-      </p>
+      <div className="flex flex-col">
+        {offline ? <OfflineBanner /> : null}
+        <p className="py-8 text-center text-sm text-muted-foreground">
+          {t('teamclaude.activity.empty', 'No activity yet.')}
+        </p>
+      </div>
     )
   }
 
@@ -91,6 +112,7 @@ export function ActivityTab({ activity }: { activity: TcActivityRow[] }): React.
 
   return (
     <div className="flex h-[360px] flex-col">
+      {offline ? <OfflineBanner /> : null}
       <div
         role="row"
         className="grid grid-cols-[80px_120px_140px_60px_70px_1fr] gap-2 border-b border-border bg-muted/60 px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"

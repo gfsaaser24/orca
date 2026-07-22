@@ -16,7 +16,7 @@ import {
   StateDot,
   ThrottleBadge
 } from './teamclaude-atoms'
-import { BUCKET_KEYS, BUCKET_LABELS, surfaceGates } from './teamclaude-model'
+import { BUCKET_KEYS, BUCKET_LABELS, formatAge, surfaceGates } from './teamclaude-model'
 
 // Why: the expanded per-account view. Every bucket (including the Fable bucket)
 // gets its own bar, reset countdown, and overage/stale badges; per-account
@@ -121,6 +121,26 @@ export function TeamclaudeFlyout({
   const gates = surfaceGates(state)
   const accounts = state?.accounts ?? []
   const anyPinned = accounts.some((account) => account.pinned)
+  // Why (offline degradation matrix, spec §5): keep the last-known fleet on
+  // screen greyed rather than blanking to a bare message, with an age stamp so
+  // the reader knows how stale the numbers are. snapshotAt is the epoch of the
+  // last real snapshot this state was built from.
+  const showLastKnownFleet = gates.offline && accounts.length > 0
+  const lastKnownAgeMs = state ? Math.max(0, now - state.snapshotAt) : 0
+
+  const fleet = (greyed: boolean): React.JSX.Element => (
+    <div className={cn('flex flex-col divide-y divide-border', greyed && 'opacity-60')}>
+      {accounts.map((account) => (
+        <AccountCard
+          key={account.id}
+          account={account}
+          controls={controls}
+          controlsEnabled={!greyed && gates.controlsEnabled}
+          now={now}
+        />
+      ))}
+    </div>
+  )
 
   return (
     <div className={cn('flex w-80 flex-col gap-2 text-sm', className)}>
@@ -143,7 +163,21 @@ export function TeamclaudeFlyout({
         </p>
       ) : null}
 
-      {!gates.showUsage ? (
+      {showLastKnownFleet ? (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[10px] text-muted-foreground">
+              {t('teamclaude.flyout.offline', 'The proxy is offline.')}
+            </span>
+            <span className="text-[10px] text-muted-foreground/80">
+              {t('teamclaude.flyout.asOf', 'as of {{value0}} ago', {
+                value0: formatAge(lastKnownAgeMs)
+              })}
+            </span>
+          </div>
+          {fleet(true)}
+        </div>
+      ) : !gates.showUsage ? (
         <p className="px-1 py-3 text-center text-xs text-muted-foreground">
           {gates.offline
             ? t('teamclaude.flyout.offline', 'The proxy is offline.')
@@ -156,17 +190,7 @@ export function TeamclaudeFlyout({
           {t('teamclaude.flyout.noAccounts', 'No accounts configured.')}
         </p>
       ) : (
-        <div className="flex flex-col divide-y divide-border">
-          {accounts.map((account) => (
-            <AccountCard
-              key={account.id}
-              account={account}
-              controls={controls}
-              controlsEnabled={gates.controlsEnabled}
-              now={now}
-            />
-          ))}
-        </div>
+        fleet(false)
       )}
 
       {anyPinned ? (
@@ -175,7 +199,7 @@ export function TeamclaudeFlyout({
           <p className="text-[10px] text-muted-foreground">
             {t(
               'teamclaude.flyout.pinHint',
-              'Pinned accounts route this session only; the pin clears when Orca restarts.'
+              'Pinned accounts route this session only; the pin clears when the proxy restarts.'
             )}
           </p>
         </>
