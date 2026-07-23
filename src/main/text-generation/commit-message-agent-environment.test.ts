@@ -301,5 +301,43 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
       )
       expect(seen[0]?.skipManagedTokenRotation).toBe(false)
     })
+
+    // End-to-end mirror of ClaudeRuntimeAuthService's gate: a resolver that
+    // rotates unless told to skip (as the real service does) must NOT rotate on
+    // the text-gen path when routed, proving the option is threaded through.
+    function rotationTrackingResolvers(state: { rotated: boolean }) {
+      return {
+        prepareForClaudeLaunch: async (
+          _target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null },
+          options?: { skipManagedTokenRotation?: boolean }
+        ) => {
+          if (!options?.skipManagedTokenRotation) {
+            state.rotated = true
+          }
+          return {
+            configDir: '/home/tester/.claude',
+            runtime: 'host' as const,
+            wslDistro: null,
+            wslLinuxConfigDir: null,
+            envPatch: { CLAUDE_CONFIG_DIR: '/home/tester/.claude' },
+            stripAuthEnv: true,
+            provenance: 'managed:test'
+          }
+        }
+      }
+    }
+
+    it('text-gen path skips managed-token rotation when routed', async () => {
+      setRoutedSnapshot()
+      const state = { rotated: false }
+      await prepareLocalCommitMessageAgentEnv('claude', rotationTrackingResolvers(state))
+      expect(state.rotated).toBe(false)
+    })
+
+    it('text-gen path rotates the managed token when not routed', async () => {
+      const state = { rotated: false }
+      await prepareLocalCommitMessageAgentEnv('claude', rotationTrackingResolvers(state))
+      expect(state.rotated).toBe(true)
+    })
   })
 })
