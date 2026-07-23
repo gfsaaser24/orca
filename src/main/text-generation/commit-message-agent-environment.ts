@@ -2,12 +2,55 @@ import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-au
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 import { readShellStartupEnvVar } from '../pty/shell-startup-env'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import { getTeamclaudeRoutingSnapshot } from '../teamclaude/init'
+import { applyRouting } from '../teamclaude/routing-env'
 
 export type CommitMessageAgentEnvironmentResolvers = {
   prepareForCodexLaunch?: (target?: CommitMessageAgentRuntimeTarget) => string | null
   prepareForClaudeLaunch?: (
-    target?: CommitMessageAgentRuntimeTarget
+    target?: CommitMessageAgentRuntimeTarget,
+    options?: { skipManagedTokenRotation?: boolean }
   ) => Promise<ClaudeRuntimeAuthPreparation>
+}
+
+// TeamClaude text-generation routing seam (spec §4). Host-only: WSL/SSH text-gen
+// is remote out-of-scope (a 127.0.0.1 proxy + Windows CA are meaningless in WSL).
+function applyTeamclaudeTextgenRouting(env: NodeJS.ProcessEnv): void {
+  try {
+    const result = applyRouting(
+      env as Record<string, string>,
+      'textgen',
+      getTeamclaudeRoutingSnapshot()
+    )
+    for (const [key, value] of Object.entries(result.env)) {
+      if (typeof value === 'string') {
+        env[key] = value
+      }
+    }
+    for (const key of result.envToDelete) {
+      delete env[key]
+    }
+  } catch {
+    // Fail-open: text generation must never fail to launch because of TeamClaude.
+  }
+}
+
+// Whether text-gen will actually be fleet-routed — drives the auth-preparation
+// gate (skip only managed-token-rotation). Delegates carve-outs to applyRouting.
+function willTeamclaudeTextgenRoute(): boolean {
+  try {
+    const snapshot = getTeamclaudeRoutingSnapshot()
+    // Probe on a CLEAN env carrying only ANTHROPIC_BASE_URL so an inherited
+    // HTTPS_PROXY on the host cannot false-positive "routed".
+    const probeEnv: Record<string, string> = {}
+    if (typeof process.env.ANTHROPIC_BASE_URL === 'string') {
+      probeEnv.ANTHROPIC_BASE_URL = process.env.ANTHROPIC_BASE_URL
+    }
+    const probe = applyRouting(probeEnv, 'textgen', snapshot)
+    return probe.env.HTTPS_PROXY === `http://127.0.0.1:${snapshot.port}`
+  } catch {
+    return false
+  }
 }
 
 export type CommitMessageAgentRuntimeTarget = {
@@ -105,10 +148,16 @@ export async function prepareLocalCommitMessageAgentEnv(
     }
 
     if (agentId === 'claude' && resolvers.prepareForClaudeLaunch) {
-      const preparation = await resolvers.prepareForClaudeLaunch(target)
+      const willRoute = target?.runtime !== 'wsl' && willTeamclaudeTextgenRoute()
+      const preparation = await resolvers.prepareForClaudeLaunch(target, {
+        skipManagedTokenRotation: willRoute
+      })
       const env = applyClaudeEnvPatch(cloneProcessEnv(), preparation.envPatch, {
         stripAuthEnv: preparation.stripAuthEnv
       })
+      if (target?.runtime !== 'wsl') {
+        applyTeamclaudeTextgenRouting(env)
+      }
       return { ok: true, env }
     }
   } catch (error) {

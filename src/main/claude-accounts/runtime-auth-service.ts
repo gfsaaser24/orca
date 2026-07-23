@@ -37,6 +37,14 @@ import {
   type ClaudeAccountSelectionTarget
 } from './runtime-selection'
 
+/** Options for a runtime-auth sync/prepare. `skipManagedTokenRotation` is the
+ *  surgical auth-preparation gate (spec §4): when a launch will be fleet-routed,
+ *  skip ONLY the Orca-initiated OAuth rotation — keep envPatch, materialization,
+ *  and strip. Threaded from the PTY/text-gen call sites. */
+export type ClaudeRuntimeSyncOptions = {
+  skipManagedTokenRotation?: boolean
+}
+
 export type ClaudeRuntimeAuthPreparation = {
   configDir: string
   runtime?: 'host' | 'wsl'
@@ -115,10 +123,11 @@ export class ClaudeRuntimeAuthService {
   }
 
   async prepareForClaudeLaunch(
-    target?: ClaudeAccountSelectionTarget
+    target?: ClaudeAccountSelectionTarget,
+    options?: ClaudeRuntimeSyncOptions
   ): Promise<ClaudeRuntimeAuthPreparation> {
     const effectiveTarget = target ?? this.getDefaultAccountSelectionTarget()
-    await this.syncForCurrentSelection(effectiveTarget)
+    await this.syncForCurrentSelection(effectiveTarget, options)
     return this.getPreparation(effectiveTarget)
   }
 
@@ -130,9 +139,12 @@ export class ClaudeRuntimeAuthService {
     return this.getPreparation(effectiveTarget)
   }
 
-  async syncForCurrentSelection(target?: ClaudeAccountSelectionTarget): Promise<void> {
+  async syncForCurrentSelection(
+    target?: ClaudeAccountSelectionTarget,
+    options?: ClaudeRuntimeSyncOptions
+  ): Promise<void> {
     await this.serializeMutation(() =>
-      this.doSyncForCurrentSelection(target ?? this.getDefaultAccountSelectionTarget())
+      this.doSyncForCurrentSelection(target ?? this.getDefaultAccountSelectionTarget(), options)
     )
   }
 
@@ -178,7 +190,10 @@ export class ClaudeRuntimeAuthService {
     return next
   }
 
-  private async doSyncForCurrentSelection(target?: ClaudeAccountSelectionTarget): Promise<void> {
+  private async doSyncForCurrentSelection(
+    target?: ClaudeAccountSelectionTarget,
+    options?: ClaudeRuntimeSyncOptions
+  ): Promise<void> {
     const settings = this.store.getSettings()
     const effectiveTarget = this.resolveWslDefaultTarget(target)
     const normalizedTarget = normalizeClaudeAccountSelectionTarget(effectiveTarget)
@@ -432,7 +447,11 @@ export class ClaudeRuntimeAuthService {
     if (liveClaudePtys && isOauthTokenExpiring(credentialsJson)) {
       this.managedRefreshDeferredByLivePtyAccountId = activeAccount.id
     }
-    if (!liveClaudePtys) {
+    // Auth-preparation gate (spec §4): when this launch will be fleet-routed,
+    // skip ONLY the Orca-initiated OAuth rotation. envPatch, credential
+    // materialization, and stripAuthEnv below are untouched — the claude CLI
+    // still self-refreshes through the proxy's raw /v1/oauth/token passthrough.
+    if (!liveClaudePtys && !options?.skipManagedTokenRotation) {
       const refreshed = await this.refreshManagedAccountTokenIfNeeded(
         activeAccount,
         credentialsJson

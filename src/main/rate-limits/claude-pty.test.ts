@@ -161,6 +161,46 @@ describe('fetchViaPty', () => {
     await resultPromise
   })
 
+  it('sets TEAMCLAUDE_RUN_GUARD on the hidden usage PTY spawn env (spec §4 R-A)', async () => {
+    const term = makeMockTerm()
+    spawnMock.mockReturnValue(term)
+
+    const resultPromise = fetchViaPty()
+    await vi.advanceTimersByTimeAsync(0)
+
+    const spawnEnv = spawnMock.mock.calls[0]?.[2]?.env as Record<string, string>
+    expect(spawnEnv.TEAMCLAUDE_RUN_GUARD).toBe('1')
+
+    term.emitExit()
+    await resultPromise
+  })
+
+  it('exports TEAMCLAUDE_RUN_GUARD inside the WSL launch command (spec §4 R-A)', async () => {
+    const term = makeMockTerm()
+    spawnMock.mockReturnValue(term)
+
+    const resultPromise = fetchViaPty({
+      authPreparation: {
+        configDir: '/home/u/.claude',
+        runtime: 'wsl',
+        wslDistro: 'Ubuntu',
+        wslLinuxConfigDir: '/home/u/.claude',
+        envPatch: { CLAUDE_CONFIG_DIR: '/home/u/.claude' },
+        stripAuthEnv: false,
+        provenance: 'system'
+      }
+    })
+    await vi.advanceTimersByTimeAsync(0)
+
+    const [, spawnArgs] = spawnMock.mock.calls[0] as [string, string[]]
+    const bashCommand = spawnArgs.at(-1) as string
+    expect(bashCommand).toContain('export TEAMCLAUDE_RUN_GUARD=1')
+    expect(bashCommand).toContain('exec claude')
+
+    term.emitExit()
+    await resultPromise
+  })
+
   it('kills and unregisters the hidden PTY when the fetch signal aborts', async () => {
     const term = makeMockTerm()
     spawnMock.mockReturnValue(term)

@@ -1,8 +1,56 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { prepareLocalCommitMessageAgentEnv } from './commit-message-agent-environment'
+
+// Why: the host running these tests may itself have the TeamClaude PATH shim
+// exporting HTTPS_PROXY/etc. Those would leak into cloneProcessEnv() and mask the
+// seam's own additions. Clear them so assertions test THIS code, not the host.
+const TEAMCLAUDE_PROXY_ENV_KEYS = [
+  'HTTPS_PROXY',
+  'HTTP_PROXY',
+  'https_proxy',
+  'http_proxy',
+  'ALL_PROXY',
+  'all_proxy',
+  'NO_PROXY',
+  'no_proxy',
+  'NODE_EXTRA_CA_CERTS',
+  'TEAMCLAUDE_RUN_GUARD',
+  'ANTHROPIC_BASE_URL'
+]
+
+beforeEach(() => {
+  for (const key of TEAMCLAUDE_PROXY_ENV_KEYS) {
+    delete process.env[key]
+  }
+})
+
+const { snapshotRef } = vi.hoisted(() => ({
+  snapshotRef: {
+    current: {
+      proxyUp: false,
+      port: 3456,
+      caPath: null as string | null,
+      knownPorts: [3456] as number[],
+      orcaNetworkProxyConfigured: false
+    }
+  }
+}))
+vi.mock('../teamclaude/init', () => ({
+  getTeamclaudeRoutingSnapshot: () => snapshotRef.current
+}))
+
+function setRoutedSnapshot(): void {
+  snapshotRef.current = {
+    proxyUp: true,
+    port: 3456,
+    caPath: 'C:\\certs\\tc-ca.pem',
+    knownPorts: [3456],
+    orcaNetworkProxyConfigured: false
+  }
+}
 
 const originalEnv = { ...process.env }
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -20,6 +68,33 @@ afterEach(() => {
   Object.assign(process.env, originalEnv)
   while (tempDirs.length > 0) {
     rmSync(tempDirs.pop()!, { recursive: true, force: true })
+  }
+  snapshotRef.current = {
+    proxyUp: false,
+    port: 3456,
+    caPath: null,
+    knownPorts: [3456],
+    orcaNetworkProxyConfigured: false
+  }
+})
+
+const claudePreparationResolvers = (
+  spy?: (options?: { skipManagedTokenRotation?: boolean }) => void
+) => ({
+  prepareForClaudeLaunch: async (
+    _target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null },
+    options?: { skipManagedTokenRotation?: boolean }
+  ) => {
+    spy?.(options)
+    return {
+      configDir: '/home/tester/.claude',
+      runtime: 'host' as const,
+      wslDistro: null,
+      wslLinuxConfigDir: null,
+      envPatch: { CLAUDE_CONFIG_DIR: '/home/tester/.claude' },
+      stripAuthEnv: true,
+      provenance: 'managed:test'
+    }
   }
 })
 
@@ -164,5 +239,67 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
     })
 
     expect(result).toEqual({ ok: true })
+  })
+
+  describe('TeamClaude text-generation routing seam (spec §4)', () => {
+    it('routes host claude text-gen through the proxy when connected', async () => {
+      setRoutedSnapshot()
+      const result = await prepareLocalCommitMessageAgentEnv('claude', claudePreparationResolvers())
+      expect(result.ok).toBe(true)
+      const env = (result as { ok: true; env?: NodeJS.ProcessEnv }).env
+      expect(env?.TEAMCLAUDE_RUN_GUARD).toBe('1')
+      expect(env?.HTTPS_PROXY).toBe('http://127.0.0.1:3456')
+      expect(env?.NODE_EXTRA_CA_CERTS).toBe('C:\\certs\\tc-ca.pem')
+      expect(env?.CLAUDE_CONFIG_DIR).toBe('/home/tester/.claude')
+    })
+
+    it('sets only the guard (no proxy) when the proxy is down', async () => {
+      const result = await prepareLocalCommitMessageAgentEnv('claude', claudePreparationResolvers())
+      const env = (result as { ok: true; env?: NodeJS.ProcessEnv }).env
+      expect(env?.TEAMCLAUDE_RUN_GUARD).toBe('1')
+      expect(env?.HTTPS_PROXY).toBeUndefined()
+    })
+
+    it('skips WSL text-gen entirely (remote out-of-scope)', async () => {
+      setRoutedSnapshot()
+      const result = await prepareLocalCommitMessageAgentEnv(
+        'claude',
+        claudePreparationResolvers(),
+        { runtime: 'wsl', wslDistro: 'Ubuntu' }
+      )
+      const env = (result as { ok: true; env?: NodeJS.ProcessEnv }).env
+      expect(env?.HTTPS_PROXY).toBeUndefined()
+      expect(env?.TEAMCLAUDE_RUN_GUARD).toBeUndefined()
+    })
+
+    it('does not touch non-claude (codex) text-gen', async () => {
+      setRoutedSnapshot()
+      const result = await prepareLocalCommitMessageAgentEnv('codex', {
+        prepareForCodexLaunch: () => 'C:\\codex-home'
+      })
+      const env = (result as { ok: true; env?: NodeJS.ProcessEnv }).env
+      expect(env?.HTTPS_PROXY).toBeUndefined()
+      expect(env?.TEAMCLAUDE_RUN_GUARD).toBeUndefined()
+    })
+
+    it('auth gate: skips managed-token-rotation when routed', async () => {
+      setRoutedSnapshot()
+      const seen: ({ skipManagedTokenRotation?: boolean } | undefined)[] = []
+      await prepareLocalCommitMessageAgentEnv(
+        'claude',
+        claudePreparationResolvers((options) => seen.push(options))
+      )
+      expect(seen).toHaveLength(1)
+      expect(seen[0]?.skipManagedTokenRotation).toBe(true)
+    })
+
+    it('auth gate: keeps managed-token-rotation when not routed', async () => {
+      const seen: ({ skipManagedTokenRotation?: boolean } | undefined)[] = []
+      await prepareLocalCommitMessageAgentEnv(
+        'claude',
+        claudePreparationResolvers((options) => seen.push(options))
+      )
+      expect(seen[0]?.skipManagedTokenRotation).toBe(false)
+    })
   })
 })
