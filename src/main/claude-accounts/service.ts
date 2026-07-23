@@ -55,6 +55,7 @@ type ClaudeIdentity = {
   email: string | null
   organizationUuid: string | null
   organizationName: string | null
+  accountUuid: string | null
 }
 
 type CapturedClaudeAuth = {
@@ -87,6 +88,7 @@ function shellQuote(value: string): string {
 export class ClaudeAccountService {
   private mutationQueue: Promise<unknown> = Promise.resolve()
   private cancelPendingClaudeLogin: (() => boolean) | null = null
+  private accountUuidBackfillStarted = false
 
   constructor(
     private readonly store: Store,
@@ -96,7 +98,74 @@ export class ClaudeAccountService {
 
   listAccounts(): ClaudeRateLimitAccountsState {
     this.normalizeActiveSelection()
+    // Lazy one-time accountUuid backfill (spec §4 G-C): read each legacy record's
+    // credentials once to persist its stable accountUuid for the fleet join. Fire
+    // and forget — the fleet mapping falls back to email until it completes.
+    void this.ensureAccountUuidsBackfilled()
     return this.getSnapshot()
+  }
+
+  /** Persist `accountUuid` onto any stored record that lacks it by reading its
+   *  managed credentials exactly once (spec §4 G-C). Idempotent + serialized. */
+  async ensureAccountUuidsBackfilled(): Promise<void> {
+    if (this.accountUuidBackfillStarted) {
+      return
+    }
+    this.accountUuidBackfillStarted = true
+    if (!this.store.getSettings().claudeManagedAccounts.some((account) => !account.accountUuid)) {
+      return
+    }
+    await this.serializeMutation(() => this.doBackfillAccountUuids())
+  }
+
+  private async doBackfillAccountUuids(): Promise<void> {
+    const accounts = this.store.getSettings().claudeManagedAccounts
+    const resolved = new Map<string, string>()
+    for (const account of accounts) {
+      if (account.accountUuid) {
+        continue
+      }
+      try {
+        const snapshot = await this.readManagedAuthSnapshot(account.id, account.managedAuthPath)
+        const accountUuid = this.readAccountUuidFromManagedAuth(
+          snapshot.credentialsJson,
+          snapshot.oauthAccountJson
+        )
+        if (accountUuid) {
+          resolved.set(account.id, accountUuid)
+        }
+      } catch (error) {
+        // Best-effort: a missing/unreadable/unowned store must not break listing.
+        console.warn(`[claude-accounts] accountUuid backfill skipped for ${account.id}:`, error)
+      }
+    }
+    if (resolved.size === 0) {
+      return
+    }
+    // Re-read to avoid clobbering a concurrent mutation; only fill still-empty ids.
+    const latest = this.store.getSettings().claudeManagedAccounts
+    const next = latest.map((account) =>
+      !account.accountUuid && resolved.has(account.id)
+        ? { ...account, accountUuid: resolved.get(account.id)! }
+        : account
+    )
+    this.store.updateSettings({ claudeManagedAccounts: next })
+  }
+
+  private readAccountUuidFromManagedAuth(
+    credentialsJson: string | null,
+    oauthAccountJson: string | null
+  ): string | null {
+    const credentialOauth = this.asRecord(
+      this.parseJsonObject(credentialsJson ?? '')?.claudeAiOauth
+    )
+    const oauthAccount = this.asRecord(this.parseJsonObject(oauthAccountJson ?? ''))
+    return this.normalizeField(
+      this.readString(credentialOauth, 'accountUuid') ??
+        this.readString(credentialOauth, 'accountId') ??
+        this.readString(oauthAccount, 'accountUuid') ??
+        this.readString(oauthAccount, 'accountId')
+    )
   }
 
   async addAccount(target?: ClaudeAccountAddTarget): Promise<ClaudeRateLimitAccountsState> {
@@ -158,6 +227,7 @@ export class ClaudeAccountService {
         authMethod: 'subscription-oauth',
         organizationUuid: captured.identity.organizationUuid,
         organizationName: captured.identity.organizationName,
+        accountUuid: captured.identity.accountUuid,
         createdAt: now,
         updatedAt: now,
         lastAuthenticatedAt: now
@@ -204,6 +274,7 @@ export class ClaudeAccountService {
             email: captured.identity.email!,
             organizationUuid: captured.identity.organizationUuid,
             organizationName: captured.identity.organizationName,
+            accountUuid: captured.identity.accountUuid ?? entry.accountUuid ?? null,
             updatedAt: now,
             lastAuthenticatedAt: now
           }
@@ -637,6 +708,14 @@ export class ClaudeAccountService {
       ),
       organizationName: this.normalizeField(
         this.readString(status, 'organizationName') ?? this.readString(oauth, 'organizationName')
+      ),
+      accountUuid: this.normalizeField(
+        this.readString(status, 'accountUuid') ??
+          this.readString(status, 'accountId') ??
+          this.readString(oauth, 'accountUuid') ??
+          this.readString(oauth, 'accountId') ??
+          this.readString(credentialOauth, 'accountUuid') ??
+          this.readString(credentialOauth, 'accountId')
       )
     }
   }

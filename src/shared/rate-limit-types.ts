@@ -15,7 +15,7 @@ export type RateLimitBucket = RateLimitWindow & {
   name: string
 }
 
-export type UsageRateLimitSource = 'oauth' | 'cli' | 'web'
+export type UsageRateLimitSource = 'oauth' | 'cli' | 'web' | 'teamclaude'
 
 export type UsageRateLimitFailureKind =
   | 'missing-credentials'

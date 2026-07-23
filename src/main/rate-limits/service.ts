@@ -7,8 +7,11 @@ import type {
   CodexRateLimitResetResult,
   RateLimitState,
   ProviderRateLimits,
+  RateLimitWindow,
   InactiveAccountUsage
 } from '../../shared/rate-limit-types'
+import { getTeamclaudeUsageSnapshot } from '../teamclaude/init'
+import type { TcAccount, TcQuotaBucket } from '../../shared/teamclaude-types'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
 import type { InactiveClaudeAccountInfo } from './claude-fetcher'
 import { consumeCodexRateLimitResetCredit, fetchCodexRateLimits } from './codex-fetcher'
@@ -93,6 +96,60 @@ const INDIVIDUALLY_REFRESHABLE_PROVIDERS: ReadonlySet<ActiveRateLimitProvider> =
 ])
 const STALE_THRESHOLD_MS = 30 * 60 * 1000 // 30 minutes — after this, stale data is dropped
 const INACTIVE_FETCH_DEBOUNCE_MS = 60 * 1000 // 60 seconds — debounce fetch-on-open
+
+// --- TeamClaude fleet → ProviderRateLimits mapping (spec §4) ----------------
+// A TcQuotaBucket already carries usedPercent 0–100 (clamped upstream) and
+// observedAt (Phase-0 last-observed epoch, NEVER HTTP receipt time). Map it into
+// Orca's RateLimitWindow shape; resetDescription is left null (renderer formats).
+function mapTeamclaudeBucket(
+  bucket: TcQuotaBucket | null,
+  windowMinutes: number
+): RateLimitWindow | null {
+  if (!bucket) {
+    return null
+  }
+  return {
+    usedPercent: bucket.usedPercent,
+    windowMinutes,
+    resetsAt: bucket.resetsAt,
+    resetDescription: null
+  }
+}
+
+function mapTeamclaudeAccountToClaudeRateLimits(account: TcAccount): ProviderRateLimits {
+  // Freshness comes from the freshest bucket observedAt — never receipt time.
+  const observedAts = [
+    account.buckets.unified5h,
+    account.buckets.unified7d,
+    account.buckets.unified7dFable,
+    account.buckets.unified7dSonnet
+  ]
+    .map((bucket) => bucket?.observedAt)
+    .filter((value): value is number => typeof value === 'number')
+  return {
+    provider: 'claude',
+    session: mapTeamclaudeBucket(account.buckets.unified5h, 300),
+    weekly: mapTeamclaudeBucket(account.buckets.unified7d, 10080),
+    fableWeekly: mapTeamclaudeBucket(account.buckets.unified7dFable, 10080),
+    updatedAt: observedAts.length > 0 ? Math.max(...observedAts) : 0,
+    error: null,
+    status: 'ok',
+    usageMetadata: { source: 'teamclaude', lastSuccessfulSource: 'teamclaude' }
+  }
+}
+
+function emptyTeamclaudeClaudeRateLimits(): ProviderRateLimits {
+  return {
+    provider: 'claude',
+    session: null,
+    weekly: null,
+    fableWeekly: null,
+    updatedAt: 0,
+    error: null,
+    status: 'ok',
+    usageMetadata: { source: 'teamclaude' }
+  }
+}
 const DEFERRED_STARTUP_ACTIVE_REFRESH_MS = 1000
 
 // Why: inactive account arrays are derived from provider-specific caches on
@@ -486,6 +543,12 @@ export class RateLimitService {
     }
     this.pruneInactiveClaudeState()
     if (this.inactiveClaudeFetching.size > 0) {
+      return
+    }
+    // TeamClaude usage short-circuit (spec §4): source inactive host-local Claude
+    // meters from the fleet snapshot; do not spawn native OAuth/CLI probes.
+    if (this.shouldShortCircuitClaudeUsage()) {
+      this.applyTeamclaudeInactiveClaudeUsage()
       return
     }
     const accounts = this.inactiveClaudeAccountsResolver?.() ?? []
@@ -996,6 +1059,60 @@ export class RateLimitService {
     }
   }
 
+  // --- TeamClaude usage short-circuit (spec §4) ------------------------------
+  // When the fleet proxy is connected AND usage-ready, host-local Claude usage is
+  // sourced from the fleet snapshot instead of native OAuth/CLI fetches. Scoped
+  // to HOST-LOCAL targets only — WSL/SSH runtime targets keep native tracking
+  // (remote work is unrouted, so fleet meters would misrepresent it).
+  //
+  // Transition quiesce: this is a per-cycle decision evaluated at the START of a
+  // fetch cycle. It never aborts an in-flight cycle, so an OAuth rotation already
+  // dispatched through claudeAuthPreparationResolver runs to completion and
+  // persists its replacement token before the short-circuit takes over.
+  private shouldShortCircuitClaudeUsage(): boolean {
+    if (this.claudeFetchTarget.runtime !== 'host') {
+      return false
+    }
+    const usage = getTeamclaudeUsageSnapshot()
+    return usage.connected && usage.usageReady
+  }
+
+  private buildTeamclaudeClaudeRateLimits(): ProviderRateLimits {
+    const usage = getTeamclaudeUsageSnapshot()
+    const selected =
+      (usage.activeAccountName
+        ? usage.accounts.find((account) => account.name === usage.activeAccountName)
+        : undefined) ?? usage.accounts[0]
+    return selected
+      ? mapTeamclaudeAccountToClaudeRateLimits(selected)
+      : emptyTeamclaudeClaudeRateLimits()
+  }
+
+  // Populate the ACTIVE Claude meter from the fleet, skipping all native work.
+  private shortCircuitClaudeUsageIfConnected(): boolean {
+    if (!this.shouldShortCircuitClaudeUsage()) {
+      return false
+    }
+    this.updateState({ ...this.state, claude: this.buildTeamclaudeClaudeRateLimits() })
+    return true
+  }
+
+  // Populate INACTIVE Claude meters from the fleet (matched by orcaAccountId),
+  // skipping native inactive fetches entirely.
+  private applyTeamclaudeInactiveClaudeUsage(): void {
+    const usage = getTeamclaudeUsageSnapshot()
+    const inactive = this.inactiveClaudeAccountsResolver?.() ?? []
+    this.inactiveClaudeFetching.clear()
+    for (const account of inactive) {
+      const fleet = usage.accounts.find((entry) => entry.orcaAccountId === account.id)
+      if (fleet) {
+        this.inactiveClaudeCache.set(account.id, mapTeamclaudeAccountToClaudeRateLimits(fleet))
+      }
+    }
+    this.lastInactiveClaudeFetchAt = Date.now()
+    this.pushToRenderer()
+  }
+
   private async fetchClaudeOnly(options?: { force?: boolean }): Promise<void> {
     if (this.isFetching) {
       if (options?.force) {
@@ -1346,11 +1463,18 @@ export class RateLimitService {
       return
     }
     const claudeTarget = this.claudeFetchTarget
-    const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+    // TeamClaude usage short-circuit (spec §4): when host-local Claude is fleet
+    // usage-ready, skip OAuth prep entirely and source the meter from the fleet.
+    const useTeamclaudeClaude = this.shouldShortCircuitClaudeUsage()
+    const claudeAuthPreparation = useTeamclaudeClaude
+      ? undefined
+      : await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
       return
     }
-    const claudeProvenance = claudeAuthPreparation?.provenance ?? 'system'
+    const claudeProvenance = useTeamclaudeClaude
+      ? 'teamclaude'
+      : (claudeAuthPreparation?.provenance ?? 'system')
     const claudeGeneration = this.claudeFetchGeneration
     const codexTarget = this.codexFetchTarget
     const codexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
@@ -1420,13 +1544,15 @@ export class RateLimitService {
 
     const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
       await Promise.allSettled([
-        fetchClaudeRateLimits({
-          authPreparation: claudeAuthPreparation,
-          allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-          allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
-          networkProxySettings: this.networkProxySettingsResolver?.(),
-          signal
-        }),
+        useTeamclaudeClaude
+          ? Promise.resolve(this.buildTeamclaudeClaudeRateLimits())
+          : fetchClaudeRateLimits({
+              authPreparation: claudeAuthPreparation,
+              allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+              allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+              networkProxySettings: this.networkProxySettingsResolver?.(),
+              signal
+            }),
         missingWslCodexHome ??
           fetchCodexRateLimits({
             codexHomePath,
@@ -1540,11 +1666,15 @@ export class RateLimitService {
           } satisfies ProviderRateLimits)
 
     const latestCodexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
-    const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+    const latestClaudeAuthPreparation = useTeamclaudeClaude
+      ? undefined
+      : await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
       return
     }
-    const latestClaudeProvenance = latestClaudeAuthPreparation?.provenance ?? 'system'
+    const latestClaudeProvenance = useTeamclaudeClaude
+      ? 'teamclaude'
+      : (latestClaudeAuthPreparation?.provenance ?? 'system')
     const latestCodexProvenance = this.getCodexProvenance(codexTarget, latestCodexHomePath)
     const shouldApplyCodex =
       codexGeneration === this.codexFetchGeneration && codexProvenance === latestCodexProvenance
@@ -1677,6 +1807,11 @@ export class RateLimitService {
 
   private async runFetchClaudeOnlyCycle(signal: AbortSignal): Promise<void> {
     if (signal.aborted) {
+      return
+    }
+    // TeamClaude usage short-circuit (spec §4): skip OAuth prep, token refresh,
+    // and native fetches for host-local Claude when the fleet is usage-ready.
+    if (this.shortCircuitClaudeUsageIfConnected()) {
       return
     }
     const claudeTarget = this.claudeFetchTarget

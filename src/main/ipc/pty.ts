@@ -145,7 +145,18 @@ import { validateTerminalViewAttributes } from '../../shared/terminal-view-attri
 import type { PtyModelRestoreReason } from '../../shared/pty-model-restore-marker'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
-import { buildConfiguredProxyEnv, type NetworkProxySettings } from '../../shared/network-proxy'
+import {
+  buildConfiguredProxyEnv,
+  normalizeProxyUrl,
+  type NetworkProxySettings
+} from '../../shared/network-proxy'
+import { getTeamclaudeRoutingSnapshot } from '../teamclaude/init'
+import {
+  applyRouting,
+  isStaleTeamclaudeBaseUrl,
+  type RoutingKind,
+  type RoutingSnapshot
+} from '../teamclaude/routing-env'
 import { resolveSetupAgentSequenceLaunchCommand } from '../../shared/setup-agent-sequencing'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import {
@@ -633,7 +644,8 @@ function shouldSkipCodexHomeEnvForWindowsShell(
 const CODEX_HOME_ENV_KEYS = ['CODEX_HOME', 'ORCA_CODEX_HOME'] as const
 type GetSelectedCodexHomePath = (target?: CodexAccountSelectionTarget) => string | null
 type PrepareClaudeAuth = (
-  target?: ClaudeAccountSelectionTarget
+  target?: ClaudeAccountSelectionTarget,
+  options?: { skipManagedTokenRotation?: boolean }
 ) => Promise<ClaudeRuntimeAuthPreparation>
 
 function getCodexSelectionTargetForPty(
@@ -1076,6 +1088,134 @@ function routesFreshSpawnsToLocalProvider(
   provider: IPtyProvider
 ): provider is FreshLocalFallbackProvider {
   return (provider as FreshLocalFallbackProvider).routesFreshSpawnsToLocalProvider === true
+}
+
+// --- TeamClaude routing seams (spec §4) ------------------------------------
+// Claude-family agent ids that route through the TeamClaude proxy. `launchAgent`
+// WINS when present: a claude-family id routes; ANY other agent id does not
+// (and does not fall through to command sniffing). When no agent id is present,
+// fall back to Orca's executable detection on the command; ambiguity resolves to
+// *not routed* (fail-open == fail-direct, never fail-broken).
+const TEAMCLAUDE_CLAUDE_FAMILY_AGENTS: ReadonlySet<TuiAgent> = new Set<TuiAgent>([
+  'claude',
+  'claude-agent-teams',
+  'openclaude'
+])
+
+export function isTeamclaudeClaudeFamilyLaunch(
+  launchAgent: string | undefined,
+  command: string | undefined
+): boolean {
+  if (typeof launchAgent === 'string' && isTuiAgent(launchAgent)) {
+    return TEAMCLAUDE_CLAUDE_FAMILY_AGENTS.has(launchAgent)
+  }
+  return isClaudeLaunchCommand(command)
+}
+
+function isOrcaNetworkProxyConfigured(settings: NetworkProxySettings | null | undefined): boolean {
+  const normalized = normalizeProxyUrl(settings?.httpProxyUrl)
+  return normalized.ok && normalized.value !== ''
+}
+
+// The supervisor's live snapshot with `orcaNetworkProxyConfigured` OR-ed in from
+// this launch's Orca Network Proxy settings — TeamClaude cannot chain an upstream
+// proxy, so a configured Orca proxy forces the launch fully unrouted (spec §4).
+function teamclaudeSnapshotForLaunch(
+  networkProxySettings: NetworkProxySettings | null | undefined
+): RoutingSnapshot {
+  const base = getTeamclaudeRoutingSnapshot()
+  return {
+    ...base,
+    orcaNetworkProxyConfigured:
+      base.orcaNetworkProxyConfigured || isOrcaNetworkProxyConfigured(networkProxySettings)
+  }
+}
+
+type TeamclaudeSeamContext = {
+  launchAgent: string | undefined
+  command: string | undefined
+  isRemote: boolean
+  isWsl: boolean
+  networkProxySettings: NetworkProxySettings | null | undefined
+}
+
+// Mutate `env` in place with the routing result (guard + proxy vars when routed;
+// stale-base-URL removal) and return the `envToDelete` entries the daemon must
+// propagate through its inherited-env re-merge. Non-claude launches and WSL/SSH
+// contexts are left untouched. Fully fail-open: never throws.
+export function applyTeamclaudeSeamRouting(
+  env: Record<string, string>,
+  kind: RoutingKind,
+  ctx: TeamclaudeSeamContext
+): { routed: boolean; envToDelete: string[] } {
+  try {
+    if (ctx.isRemote || ctx.isWsl) {
+      return { routed: false, envToDelete: [] }
+    }
+    if (!isTeamclaudeClaudeFamilyLaunch(ctx.launchAgent, ctx.command)) {
+      return { routed: false, envToDelete: [] }
+    }
+    const snapshot = teamclaudeSnapshotForLaunch(ctx.networkProxySettings)
+    const result = applyRouting(env, kind, snapshot)
+    for (const [key, value] of Object.entries(result.env)) {
+      if (typeof value === 'string') {
+        env[key] = value
+      }
+    }
+    for (const key of result.envToDelete) {
+      delete env[key]
+    }
+    const routed = env.HTTPS_PROXY === `http://127.0.0.1:${snapshot.port}`
+    // The daemon re-merges its own inherited process.env, which spawn-request
+    // envs deliberately exclude — so a stale TeamClaude base URL living only in
+    // the host's process.env (e.g. a setx AutoRoute leftover) would survive
+    // result.envToDelete and override the proxy. Ride the deletion list when
+    // the inherited value parses as a TeamClaude origin; a corporate/Bedrock
+    // inherited URL is preserved (isStaleTeamclaudeBaseUrl returns false).
+    const envToDelete = [...result.envToDelete]
+    if (
+      routed &&
+      !envToDelete.includes('ANTHROPIC_BASE_URL') &&
+      isStaleTeamclaudeBaseUrl(process.env.ANTHROPIC_BASE_URL, snapshot)
+    ) {
+      envToDelete.push('ANTHROPIC_BASE_URL')
+    }
+    return { routed, envToDelete }
+  } catch {
+    return { routed: false, envToDelete: [] }
+  }
+}
+
+// Decide (BEFORE env assembly) whether a claude launch will actually be
+// fleet-routed, so the caller can skip only the managed-token-rotation step of
+// prepareClaudeAuth (spec §4 auth-preparation gate). Delegates the full carve-out
+// logic to `applyRouting` on a clone so it can never drift from the seam.
+export function willTeamclaudeFleetRoute(
+  env: Record<string, string> | undefined,
+  kind: RoutingKind,
+  ctx: TeamclaudeSeamContext
+): boolean {
+  try {
+    if (ctx.isRemote || ctx.isWsl) {
+      return false
+    }
+    if (!isTeamclaudeClaudeFamilyLaunch(ctx.launchAgent, ctx.command)) {
+      return false
+    }
+    const snapshot = teamclaudeSnapshotForLaunch(ctx.networkProxySettings)
+    // Probe on a CLEAN env carrying only ANTHROPIC_BASE_URL (the sole per-launch
+    // input to applyRouting's carve-out) so an inherited HTTPS_PROXY on the host
+    // (e.g. a machine with the TeamClaude shim) cannot false-positive "routed".
+    const probeEnv: Record<string, string> = {}
+    const baseUrl = env?.ANTHROPIC_BASE_URL
+    if (typeof baseUrl === 'string') {
+      probeEnv.ANTHROPIC_BASE_URL = baseUrl
+    }
+    const probe = applyRouting(probeEnv, kind, snapshot)
+    return probe.env.HTTPS_PROXY === `http://127.0.0.1:${snapshot.port}`
+  } catch {
+    return false
+  }
 }
 
 function beginPtySpawnForWorktree(
@@ -1627,6 +1767,16 @@ export function registerPtyHandlers(
         if (ctx?.isWsl === true) {
           addOrcaWslInteropEnv(env)
         }
+        // TeamClaude routing seam 1 (spec §4): host-local claude-family launches
+        // route through the proxy. Applied last so the guard/proxy vars are not
+        // clobbered by earlier env mutations. LocalPtyProvider is host-only.
+        applyTeamclaudeSeamRouting(env, 'agent', {
+          launchAgent: ctx?.launchAgent,
+          command: ctx?.command,
+          isRemote: false,
+          isWsl: ctx?.isWsl === true,
+          networkProxySettings: getSettings?.()
+        })
         return env
       },
       onSpawned: (id) => runtime?.onPtySpawned(id),
@@ -3021,8 +3171,24 @@ export function registerPtyHandlers(
         cwd,
         terminalRuntimeOptions.terminalWindowsWslDistro ?? null
       )
+      // Auth-preparation gate (spec §4): when this claude launch will be
+      // fleet-routed, skip ONLY the managed-token-rotation step of
+      // prepareClaudeAuth (envPatch/materialization/strip are kept).
+      const willFleetRoute =
+        isClaudeLaunch &&
+        willTeamclaudeFleetRoute(args.env, 'agent', {
+          launchAgent: args.launchAgent,
+          command: args.command,
+          isRemote: Boolean(args.connectionId),
+          isWsl: codexSelectionTarget.runtime === 'wsl',
+          networkProxySettings: getSettings?.()
+        })
       const claudeAuth =
-        isClaudeLaunch && prepareClaudeAuth ? await prepareClaudeAuth(codexSelectionTarget) : null
+        isClaudeLaunch && prepareClaudeAuth
+          ? await prepareClaudeAuth(codexSelectionTarget, {
+              skipManagedTokenRotation: willFleetRoute
+            })
+          : null
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
         throw new Error('A Claude account switch is in progress. Try again after it finishes.')
       }
@@ -3111,6 +3277,21 @@ export function registerPtyHandlers(
         promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
       }
 
+      // TeamClaude routing seam 2 (spec §4): the daemon replaces LocalPtyProvider
+      // and never runs its buildSpawnEnv closure, so route here for daemon host
+      // spawns. Deletions must ride envToDelete so the daemon's re-merge of its
+      // inherited process.env cannot resurrect a stale ANTHROPIC_BASE_URL.
+      const teamclaudeEnvToDelete =
+        isDaemonHostSpawn && env
+          ? applyTeamclaudeSeamRouting(env, 'agent', {
+              launchAgent: args.launchAgent,
+              command: args.command,
+              isRemote: Boolean(args.connectionId),
+              isWsl: codexSelectionTarget.runtime === 'wsl',
+              networkProxySettings: getSettings?.()
+            }).envToDelete
+          : []
+
       const authEnvToDelete = claudeAuth?.stripAuthEnv
         ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
         : undefined
@@ -3122,8 +3303,11 @@ export function registerPtyHandlers(
         ...(isMintedSessionId ? { isNewSession: true } : {})
       }
       spawnOptions.envToDelete = mergePtyEnvDeletions(
-        mergePtyEnvDeletions(authEnvToDelete, args.envToDelete ?? []),
-        isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(env) : []
+        mergePtyEnvDeletions(
+          mergePtyEnvDeletions(authEnvToDelete, args.envToDelete ?? []),
+          isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(env) : []
+        ),
+        teamclaudeEnvToDelete
       )
       if (skipCodexHomeEnv) {
         spawnOptions.envToDelete = mergePtyEnvDeletions(
@@ -3811,8 +3995,23 @@ export function registerPtyHandlers(
         cwd,
         terminalRuntimeOptions.terminalWindowsWslDistro ?? null
       )
+      // Auth-preparation gate (spec §4): skip ONLY managed-token-rotation when
+      // this claude launch will be fleet-routed; keep envPatch/materialization/strip.
+      const willFleetRoute =
+        isClaudeLaunch &&
+        willTeamclaudeFleetRoute(args.env, 'agent', {
+          launchAgent: args.launchAgent,
+          command: args.command,
+          isRemote: Boolean(args.connectionId),
+          isWsl: initialSelectionTarget.runtime === 'wsl',
+          networkProxySettings: getSettings?.()
+        })
       const claudeAuth =
-        isClaudeLaunch && prepareClaudeAuth ? await prepareClaudeAuth(initialSelectionTarget) : null
+        isClaudeLaunch && prepareClaudeAuth
+          ? await prepareClaudeAuth(initialSelectionTarget, {
+              skipManagedTokenRotation: willFleetRoute
+            })
+          : null
       spawnTiming.mark('auth')
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
         throw new Error('A Claude account switch is in progress. Try again after it finishes.')
@@ -4048,18 +4247,34 @@ export function registerPtyHandlers(
       const spawnEnv = preAllocatedHandle
         ? { ...env, ORCA_TERMINAL_HANDLE: preAllocatedHandle }
         : env
+      // TeamClaude routing seam 2 (spec §4): route daemon host spawns (the local
+      // provider's closure never runs here). envToDelete rides `combinedEnvToDelete`
+      // so the daemon's inherited-env re-merge cannot resurrect a stale base URL.
+      const teamclaudeEnvToDelete =
+        isDaemonHostSpawn && spawnEnv
+          ? applyTeamclaudeSeamRouting(spawnEnv, 'agent', {
+              launchAgent: args.launchAgent,
+              command: args.command,
+              isRemote: Boolean(args.connectionId),
+              isWsl: codexSelectionTarget.runtime === 'wsl',
+              networkProxySettings: getSettings?.()
+            }).envToDelete
+          : []
       const envToDelete = claudeAuth?.stripAuthEnv
         ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
         : undefined
       const combinedEnvToDelete = mergePtyEnvDeletions(
         mergePtyEnvDeletions(
           mergePtyEnvDeletions(
-            mergePtyEnvDeletions(envToDelete, args.envToDelete ?? []),
-            agentTeamsEnvToDelete ?? []
+            mergePtyEnvDeletions(
+              mergePtyEnvDeletions(envToDelete, args.envToDelete ?? []),
+              agentTeamsEnvToDelete ?? []
+            ),
+            isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(spawnEnv) : []
           ),
-          isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(spawnEnv) : []
+          skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : []
         ),
-        skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : []
+        teamclaudeEnvToDelete
       )
       deleteRequestedEnvKeys(spawnEnv, combinedEnvToDelete)
       promoteAgentTeamsShimPath(spawnEnv, requestedAgentTeamsPath)

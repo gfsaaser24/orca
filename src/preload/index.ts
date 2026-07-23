@@ -227,6 +227,14 @@ import type {
   ReactErrorBoundaryReportResult
 } from '../shared/crash-reporting'
 import type { PreloadApi } from './api-types'
+import {
+  TC_IPC,
+  type TcAccountSetPayload,
+  type TcActivityRow,
+  type TcBridge,
+  type TcRoute,
+  type TcState
+} from '../shared/teamclaude-types'
 
 type NativeFileDropCallback = (data: NativeFileDropPayload) => void
 
@@ -4522,7 +4530,33 @@ const api = {
       ipcRenderer.on('speech:error', listener)
       return () => ipcRenderer.removeListener('speech:error', listener)
     }
-  }
+  },
+
+  // TeamClaude cockpit bridge (additive). Channels come verbatim from TC_IPC in
+  // the frozen contract; main pushes tc:state / tc:activity, renderer invokes
+  // the control plane. See src/main/teamclaude/.
+  teamclaude: {
+    onState: (callback: (state: TcState) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, state: TcState): void => callback(state)
+      ipcRenderer.on(TC_IPC.state, listener)
+      return () => ipcRenderer.removeListener(TC_IPC.state, listener)
+    },
+    onActivity: (callback: (rows: TcActivityRow[]) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, rows: TcActivityRow[]): void =>
+        callback(rows)
+      ipcRenderer.on(TC_IPC.activity, listener)
+      return () => ipcRenderer.removeListener(TC_IPC.activity, listener)
+    },
+    pin: (accountId: string | null) => ipcRenderer.invoke(TC_IPC.pin, accountId),
+    setRoutes: (routes: TcRoute[]) => ipcRenderer.invoke(TC_IPC.routesSet, routes),
+    setAccount: (payload: TcAccountSetPayload) => ipcRenderer.invoke(TC_IPC.accountSet, payload),
+    // Bridge method names match the renderer's verified hook (startProxy/stopProxy);
+    // the underlying IPC channels stay TC_IPC.proxyStart/proxyStop.
+    startProxy: () => ipcRenderer.invoke(TC_IPC.proxyStart),
+    stopProxy: (args: { confirmLiveSessions: number }) =>
+      ipcRenderer.invoke(TC_IPC.proxyStop, args),
+    logTail: () => ipcRenderer.invoke(TC_IPC.logTail)
+  } satisfies PreloadApi['teamclaude'] satisfies TcBridge
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

@@ -3790,6 +3790,57 @@ describe('ClaudeRuntimeAuthService', () => {
     vi.mocked(refreshClaudeOauthCredentials).mockResolvedValue(null)
   })
 
+  it('auth-preparation gate skips only managed-token-rotation, keeping materialization (spec §4)', async () => {
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const existing = createClaudeCredentialsJson('one@example.com', 'one-token', null, 1_000)
+    const refreshedCreds = createClaudeCredentialsJson(
+      'one@example.com',
+      'one-refreshed',
+      null,
+      9_999_999_999_999
+    )
+    const managedAuthPath1 = createManagedClaudeAuth(testState.userDataDir, 'account-1', existing)
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('account-1', managedAuthPath1, { email: 'one@example.com' })
+      ],
+      activeClaudeManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+
+    // Non-expiring during construction so the constructor's own sync does not
+    // rotate before the gated call under test.
+    vi.mocked(isOauthTokenExpiring).mockReturnValue(false)
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    await service.syncForCurrentSelection()
+
+    // Now the token is expiring AND the launch will be fleet-routed.
+    vi.mocked(isOauthTokenExpiring).mockReturnValue(true)
+    vi.mocked(refreshClaudeOauthCredentials).mockResolvedValue(refreshedCreds)
+    vi.mocked(refreshClaudeOauthCredentials).mockClear()
+
+    const gated = await service.prepareForClaudeLaunch(undefined, {
+      skipManagedTokenRotation: true
+    })
+    // Rotation skipped...
+    expect(refreshClaudeOauthCredentials).not.toHaveBeenCalled()
+    expect(readManagedCredentialsForTest('account-1', managedAuthPath1)).toBe(existing)
+    // ...but credential materialization + env patch + strip are kept intact.
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(existing)
+    expect(gated.stripAuthEnv).toBe(true)
+    expect(gated.provenance).toBe('managed:account-1')
+
+    // Control: without the gate, the same expiring token IS rotated.
+    const ungated = await service.prepareForClaudeLaunch()
+    expect(refreshClaudeOauthCredentials).toHaveBeenCalled()
+    expect(readManagedCredentialsForTest('account-1', managedAuthPath1)).toBe(refreshedCreds)
+    expect(ungated.stripAuthEnv).toBe(true)
+
+    vi.mocked(isOauthTokenExpiring).mockReturnValue(false)
+    vi.mocked(refreshClaudeOauthCredentials).mockResolvedValue(null)
+  })
+
   it('does not refresh the active account while a Claude PTY is live', async () => {
     const expired = createClaudeCredentialsJson('one@example.com', 'one-expired', null, 1_000)
     const managedAuthPath1 = createManagedClaudeAuth(testState.userDataDir, 'account-1', expired)

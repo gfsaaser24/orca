@@ -252,6 +252,13 @@ export async function fetchViaPty(options?: {
     // risking rate-limit/geo signals on the account. Falls back to {} when unset.
     const proxyEnv = buildConfiguredProxyEnv(options?.networkProxySettings)
     Object.assign(spawnEnv, proxyEnv)
+    // Why (spec §4 R-A): this hidden usage probe spawns `claude` from PATH. On a
+    // machine with the TeamClaude PATH shim installed, a bare `claude` resolves to
+    // the shim → `teamclaude run` → a fleet-ROTATED account, which would attribute
+    // a random fleet account's usage numbers to the Orca account being refreshed.
+    // Set the run-guard (with NO TeamClaude proxy env) so the shim short-circuits
+    // and this probe always measures the local/managed account, direct.
+    spawnEnv.TEAMCLAUDE_RUN_GUARD = '1'
     const authPreparation = options?.authPreparation
     const wslConfig =
       authPreparation?.runtime === 'wsl' &&
@@ -277,6 +284,9 @@ export async function fetchViaPty(options?: {
             // keep Claude discovery bounded to a tiny temp directory.
             ...getHiddenRateLimitWslCwdSetupCommands(),
             `export CLAUDE_CONFIG_DIR=${shellQuote(wslConfig.linuxConfigDir)}`,
+            // Why (spec §4 R-A): short-circuit any WSL-side TeamClaude shim so the
+            // inner `claude` measures the managed account, not a rotated fleet one.
+            'export TEAMCLAUDE_RUN_GUARD=1',
             ...Object.entries(proxyEnv).map(([key, value]) => `export ${key}=${shellQuote(value)}`),
             'exec claude'
           ].join(' && ')

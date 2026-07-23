@@ -2368,6 +2368,11 @@ export type ClaudeManagedAccount = {
   authMethod: 'subscription-oauth' | 'unknown'
   organizationUuid?: string | null
   organizationName?: string | null
+  /** Stable Claude account UUID (from the credentials' claudeAiOauth block).
+   *  Persisted onto the record at login/capture time (and lazily backfilled once
+   *  for pre-existing records) so fleet mapping does not read credentials on
+   *  every lookup. Optional/nullable: absent on legacy records until backfilled. */
+  accountUuid?: string | null
   createdAt: number
   updatedAt: number
   lastAuthenticatedAt: number

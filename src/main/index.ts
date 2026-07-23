@@ -25,6 +25,7 @@ import { CodexUsageStore, initCodexUsagePath } from './codex-usage/store'
 import { OpenCodeUsageStore, initOpenCodeUsagePath } from './opencode-usage/store'
 import { killAllPty } from './ipc/pty'
 import { initDaemonPtyProvider, disconnectDaemon, shutdownDaemon } from './daemon/daemon-init'
+import { initTeamclaude } from './teamclaude/init'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
@@ -1048,7 +1049,8 @@ function openMainWindow(): BrowserWindow {
     automations,
     {
       prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
-      prepareForClaudeLaunch: (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target)
+      prepareForClaudeLaunch: (target, options) =>
+        claudeRuntimeAuth!.prepareForClaudeLaunch(target, options)
     },
     agentAwakeService ?? undefined,
     crashReports ?? undefined,
@@ -1072,7 +1074,7 @@ function openMainWindow(): BrowserWindow {
     store,
     runtime,
     prepareCodexRuntimeHomeForLaunch,
-    (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
+    (target, options) => claudeRuntimeAuth!.prepareForClaudeLaunch(target, options),
     {
       awaitLocalPtyStartup: () => localPtyStartupReady,
       awaitLocalPtyProviderStartup: () => localPtyProviderStartupReady,
@@ -2080,7 +2082,8 @@ app.whenReady().then(async () => {
     // even for the system-default path, so every Orca-launched Codex process
     // must resolve CODEX_HOME through the runtime-home service.
     prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
-    prepareForClaudeLaunch: (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target)
+    prepareForClaudeLaunch: (target, options) =>
+      claudeRuntimeAuth!.prepareForClaudeLaunch(target, options)
   })
   starNag = new StarNagService(store, stats)
   starNag.start()
@@ -2253,6 +2256,11 @@ app.whenReady().then(async () => {
   registerMobileHandlers(runtimeRpc, { getRelayStatus: () => desktopRelayStatus })
 
   startTerminalRuntimeStartupServices()
+  // Why: TeamClaude adopt-or-spawn supervisor + fleet client is an app-lifetime
+  // singleton (spec §4 module lifecycle). Initialize once here on the
+  // app-lifetime path — never from attachMainWindowServices, which re-runs on
+  // window recreation and would duplicate SSE connections/spawns/marker churn.
+  initTeamclaude()
   app.on('activate', requestDesktopActivation)
 
   if (serveOptions) {
@@ -2270,7 +2278,7 @@ app.whenReady().then(async () => {
       runtime,
       prepareCodexRuntimeHomeForLaunch,
       () => store!.getSettings(),
-      (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
+      (target, options) => claudeRuntimeAuth!.prepareForClaudeLaunch(target, options),
       store
     )
     // Why: headless servers have no renderer to mount <webview> browser panes.

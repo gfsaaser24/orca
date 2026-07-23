@@ -72,7 +72,8 @@ export function attachMainWindowServices(
   runtime: OrcaRuntimeService,
   getSelectedCodexHomePath?: (target?: CodexAccountSelectionTarget) => string | null,
   prepareClaudeAuth?: (
-    target?: ClaudeAccountSelectionTarget
+    target?: ClaudeAccountSelectionTarget,
+    options?: { skipManagedTokenRotation?: boolean }
   ) => Promise<ClaudeRuntimeAuthPreparation>,
   options?: {
     awaitLocalPtyStartup?: () => Promise<void>
