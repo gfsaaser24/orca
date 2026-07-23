@@ -31,7 +31,16 @@ import { TeamclaudeClient, deriveReadiness, type TcStatusSnapshot } from './clie
 import { TeamclaudeControl } from './control'
 import { TeamclaudeIpc } from './ipc'
 import { applyRouting, type RoutingKind, type RoutingSnapshot } from './routing-env'
-import type { TcReadiness, TcState } from '../../shared/teamclaude-types'
+import type { TcAccount, TcReadiness, TcState } from '../../shared/teamclaude-types'
+
+/** Read-only view of the fleet usage state for the rate-limit short-circuit
+ *  (spec §4). Empty/nullable when not connected or usage capability is absent. */
+export type TeamclaudeUsageSnapshot = {
+  connected: boolean
+  usageReady: boolean
+  accounts: TcAccount[]
+  activeAccountName: string | null
+}
 
 const DEFAULT_PORT = 3456
 const CONNECTED: ReadonlySet<TcState['lifecycle']> = new Set([
@@ -112,6 +121,16 @@ class TeamclaudeService {
 
   setOrcaNetworkProxyConfigured(configured: boolean): void {
     this.supervisor?.setOrcaNetworkProxyConfigured(configured)
+  }
+
+  getUsageSnapshot(): TeamclaudeUsageSnapshot {
+    const connected = CONNECTED.has(this.state.lifecycle)
+    const usageReady = connected && this.state.readiness.usageReady
+    const accounts = usageReady ? this.state.accounts : []
+    // Active-meter selection (spec §4): pinned, else first non-disabled, else first.
+    const active =
+      accounts.find((a) => a.pinned) ?? accounts.find((a) => a.status !== 'disabled') ?? accounts[0]
+    return { connected, usageReady, accounts, activeAccountName: active?.name ?? null }
   }
 
   private async onConfigChange(next: TcConnectionConfig | null): Promise<void> {
@@ -301,6 +320,19 @@ export function initTeamclaude(): void {
   }
   singleton = new TeamclaudeService()
   void singleton.start()
+}
+
+/** Fleet usage snapshot for the rate-limit short-circuit (spec §4). Empty-safe:
+ *  returns a disconnected snapshot when the module is not initialized. */
+export function getTeamclaudeUsageSnapshot(): TeamclaudeUsageSnapshot {
+  return (
+    singleton?.getUsageSnapshot() ?? {
+      connected: false,
+      usageReady: false,
+      accounts: [],
+      activeAccountName: null
+    }
+  )
 }
 
 /** Routing snapshot for the seam wave: `applyRouting(env, kind, snapshot)`. */

@@ -5,7 +5,23 @@ Keeping them in one file makes the ordering contract reviewable as a unit. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
+import type { TcAccount } from '../../shared/teamclaude-types'
 import { RateLimitService } from './service'
+
+const { usageRef } = vi.hoisted(() => ({
+  usageRef: {
+    current: {
+      connected: false,
+      usageReady: false,
+      accounts: [] as unknown[],
+      activeAccountName: null as string | null
+    }
+  }
+}))
+
+vi.mock('../teamclaude/init', () => ({
+  getTeamclaudeUsageSnapshot: () => usageRef.current
+}))
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
@@ -172,6 +188,12 @@ function asRateLimitWindow(window: FakeRateLimitWindow): RateLimitWindow {
 describe('RateLimitService', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    usageRef.current = {
+      connected: false,
+      usageReady: false,
+      accounts: [],
+      activeAccountName: null
+    }
     vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 0, Date.now()))
     vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValue(okProvider('opencode-go', 0, Date.now()))
     vi.mocked(fetchKimiRateLimits).mockResolvedValue(okProvider('kimi', 0, Date.now()))
@@ -1036,6 +1058,116 @@ describe('RateLimitService', () => {
     expect(state.gemini?.session?.usedPercent).toBe(30)
     expect(state.opencodeGo?.status).toBe('ok')
     expect(state.opencodeGo?.session?.usedPercent).toBe(40)
+  })
+
+  describe('TeamClaude usage short-circuit (spec §4)', () => {
+    function fleetAccount(overrides: Partial<TcAccount> = {}): TcAccount {
+      return {
+        id: 'tc-alice',
+        name: 'alice',
+        email: 'alice@example.com',
+        status: 'active',
+        priority: 0,
+        pinned: false,
+        orcaAccountId: null,
+        buckets: {
+          unified5h: { usedPercent: 42, overage: false, resetsAt: 111, observedAt: 999 },
+          unified7d: { usedPercent: 10, overage: false, resetsAt: 222, observedAt: 888 },
+          unified7dFable: null,
+          unified7dSonnet: null
+        },
+        ...overrides
+      }
+    }
+
+    function connectFleet(accounts: TcAccount[], activeAccountName: string | null): void {
+      usageRef.current = { connected: true, usageReady: true, accounts, activeAccountName }
+    }
+
+    it('sources host Claude usage from the fleet and skips native OAuth + fetch', async () => {
+      mockFreshBackgroundProviderFetches()
+      const service = new RateLimitService()
+      const authResolver = vi.fn(async () => {
+        throw new Error('OAuth prep must not run while fleet usage is short-circuited')
+      })
+      service.setClaudeAuthPreparationResolver(authResolver)
+      connectFleet([fleetAccount()], 'alice')
+
+      await service.refresh()
+
+      // Native OAuth prep + native fetch are both skipped.
+      expect(authResolver).not.toHaveBeenCalled()
+      expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
+
+      const claude = service.getState().claude
+      expect(claude?.status).toBe('ok')
+      expect(claude?.usageMetadata?.source).toBe('teamclaude')
+      expect(claude?.session?.usedPercent).toBe(42)
+      expect(claude?.session?.windowMinutes).toBe(300)
+      expect(claude?.session?.resetsAt).toBe(111)
+      expect(claude?.weekly?.usedPercent).toBe(10)
+      // Freshness is the freshest bucket observedAt — never HTTP receipt time.
+      expect(claude?.updatedAt).toBe(999)
+      // Other providers still fetch natively.
+      expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
+    })
+
+    it('keeps native Claude tracking for WSL targets (host-local scoping)', async () => {
+      mockFreshBackgroundProviderFetches()
+      const service = new RateLimitService()
+      service.setClaudeFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+      connectFleet([fleetAccount()], 'alice')
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 5, Date.now()))
+
+      await service.refresh()
+
+      // WSL runtime target is out-of-scope for the fleet — native fetch runs.
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+      expect(service.getState().claude?.usageMetadata?.source).not.toBe('teamclaude')
+    })
+
+    it('uses native Claude fetch when the fleet is disconnected', async () => {
+      mockFreshBackgroundProviderFetches()
+      const service = new RateLimitService()
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 7, Date.now()))
+
+      await service.refresh()
+
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not short-circuit when connected but usage capability is not ready', async () => {
+      mockFreshBackgroundProviderFetches()
+      const service = new RateLimitService()
+      usageRef.current = {
+        connected: true,
+        usageReady: false,
+        accounts: [fleetAccount()],
+        activeAccountName: 'alice'
+      }
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 9, Date.now()))
+
+      await service.refresh()
+
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+    })
+
+    it('sources inactive host Claude accounts from the fleet (no native probes)', async () => {
+      const service = new RateLimitService()
+      service.setInactiveClaudeAccountsResolver(() => [
+        { id: 'orca-1', email: 'alice@example.com' } as never
+      ])
+      connectFleet([fleetAccount({ orcaAccountId: 'orca-1' })], 'alice')
+
+      await service.fetchInactiveClaudeAccountsOnOpen()
+
+      expect(fetchManagedAccountUsage).not.toHaveBeenCalled()
+      const inactive = service
+        .getState()
+        .inactiveClaudeAccounts.find((a) => a.accountId === 'orca-1')
+      expect(inactive?.rateLimits?.usageMetadata?.source).toBe('teamclaude')
+      expect(inactive?.rateLimits?.session?.usedPercent).toBe(42)
+    })
   })
 
   it('passes the selected WSL Codex home into active account rate-limit fetches', async () => {

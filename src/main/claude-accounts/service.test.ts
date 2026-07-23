@@ -1454,3 +1454,94 @@ describe('ClaudeAccountService credential capture', () => {
     }
   })
 })
+
+describe('ClaudeAccountService accountUuid (spec §4 G-C)', () => {
+  afterEach(() => {
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
+  })
+
+  it('resolveIdentity extracts accountUuid from captured credentials', async () => {
+    setPlatform('linux')
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      createService() as never,
+      createService() as never,
+      createService() as never
+    )
+    const identity = (
+      service as unknown as {
+        resolveIdentity(
+          statusOutput: string,
+          oauthAccount: unknown,
+          credentialsJson: string
+        ): { accountUuid: string | null }
+      }
+    ).resolveIdentity(
+      '',
+      null,
+      JSON.stringify({
+        claudeAiOauth: { accountUuid: 'uuid-abc', email: 'a@example.com' }
+      })
+    )
+    expect(identity.accountUuid).toBe('uuid-abc')
+  })
+
+  it('lazily backfills accountUuid onto a legacy record by reading credentials once', async () => {
+    setPlatform('linux')
+    const tempDir = '/tmp/orca-claude-service-test'
+    rmSync(tempDir, { recursive: true, force: true })
+    const managedAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
+    mkdirSync(managedAuthPath, { recursive: true })
+    writeFileSync(join(managedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
+    writeFileSync(
+      join(managedAuthPath, '.credentials.json'),
+      `${JSON.stringify({ claudeAiOauth: { accountUuid: 'uuid-legacy', accessToken: 't' } })}\n`,
+      'utf-8'
+    )
+    let settings = {
+      claudeManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'legacy@example.com',
+          managedAuthPath,
+          authMethod: 'subscription-oauth',
+          organizationUuid: null,
+          organizationName: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+          // NOTE: no accountUuid — this is a pre-existing legacy record.
+        }
+      ],
+      activeClaudeManagedAccountId: 'account-1'
+    }
+    const store = {
+      getSettings: vi.fn(() => settings),
+      updateSettings: vi.fn((updates: Partial<typeof settings>) => {
+        settings = { ...settings, ...updates }
+        return settings
+      })
+    }
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      store as never,
+      createService() as never,
+      createService() as never
+    )
+
+    await service.ensureAccountUuidsBackfilled()
+
+    expect(
+      (store.getSettings().claudeManagedAccounts[0] as { accountUuid?: string | null }).accountUuid
+    ).toBe('uuid-legacy')
+    const getCallsAfterBackfill = store.getSettings.mock.calls.length
+
+    // Idempotent: a second call is a no-op (does not re-read credentials).
+    await service.ensureAccountUuidsBackfilled()
+    expect(store.getSettings.mock.calls.length).toBe(getCallsAfterBackfill)
+
+    rmSync(tempDir, { recursive: true, force: true })
+  })
+})

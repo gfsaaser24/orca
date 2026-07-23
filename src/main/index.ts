@@ -1073,7 +1073,7 @@ function openMainWindow(): BrowserWindow {
     store,
     runtime,
     prepareCodexRuntimeHomeForLaunch,
-    (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
+    (target, options) => claudeRuntimeAuth!.prepareForClaudeLaunch(target, options),
     {
       awaitLocalPtyStartup: () => localPtyStartupReady,
       awaitLocalPtyProviderStartup: () => localPtyProviderStartupReady,
@@ -2276,7 +2276,7 @@ app.whenReady().then(async () => {
       runtime,
       prepareCodexRuntimeHomeForLaunch,
       () => store!.getSettings(),
-      (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
+      (target, options) => claudeRuntimeAuth!.prepareForClaudeLaunch(target, options),
       store
     )
     // Why: headless servers have no renderer to mount <webview> browser panes.
