@@ -272,6 +272,9 @@ function normalizeStatus(
   if (disabled) {
     return 'disabled'
   }
+  if (status === undefined) {
+    return 'active'
+  }
   switch (status) {
     case 'active':
     case 'throttled':

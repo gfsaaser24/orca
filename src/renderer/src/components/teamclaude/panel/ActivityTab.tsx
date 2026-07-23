@@ -124,7 +124,7 @@ export function ActivityTab({
         <span role="columnheader">{t('teamclaude.activity.duration', 'Duration')}</span>
         <span role="columnheader">{t('teamclaude.activity.path', 'Path')}</span>
       </div>
-      <div ref={scrollRef} role="table" className="min-h-0 flex-1 overflow-auto">
+      <div ref={scrollRef} role="table" className="min-h-0 flex-1 overflow-auto scrollbar-sleek">
         <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
           {virtualRows.map((virtualRow) => {
             const row = activity[virtualRow.index]
