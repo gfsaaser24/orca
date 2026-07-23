@@ -98,6 +98,41 @@ describe('applyTeamclaudeSeamRouting (spec §4 seams 1/2)', () => {
     expect(result.envToDelete).toContain('ANTHROPIC_BASE_URL')
   })
 
+  it('rides envToDelete for a stale TC base URL living ONLY in the host process.env (daemon inherited-env resurrection)', () => {
+    setRouted()
+    const prev = process.env.ANTHROPIC_BASE_URL
+    process.env.ANTHROPIC_BASE_URL = 'http://127.0.0.1:3456'
+    try {
+      const env: Record<string, string> = {} // request env lacks the base URL
+      const result = applyTeamclaudeSeamRouting(env, 'agent', { ...baseCtx })
+      expect(result.routed).toBe(true)
+      expect(result.envToDelete).toContain('ANTHROPIC_BASE_URL')
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ANTHROPIC_BASE_URL
+      } else {
+        process.env.ANTHROPIC_BASE_URL = prev
+      }
+    }
+  })
+
+  it('preserves a corporate base URL in the host process.env (no envToDelete entry)', () => {
+    setRouted()
+    const prev = process.env.ANTHROPIC_BASE_URL
+    process.env.ANTHROPIC_BASE_URL = 'https://gateway.corp.example.com/v1'
+    try {
+      const env: Record<string, string> = {}
+      const result = applyTeamclaudeSeamRouting(env, 'agent', { ...baseCtx })
+      expect(result.envToDelete).not.toContain('ANTHROPIC_BASE_URL')
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ANTHROPIC_BASE_URL
+      } else {
+        process.env.ANTHROPIC_BASE_URL = prev
+      }
+    }
+  })
+
   it('leaves a non-claude launch completely untouched (no guard)', () => {
     setRouted()
     const env: Record<string, string> = {}

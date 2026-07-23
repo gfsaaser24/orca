@@ -151,7 +151,12 @@ import {
   type NetworkProxySettings
 } from '../../shared/network-proxy'
 import { getTeamclaudeRoutingSnapshot } from '../teamclaude/init'
-import { applyRouting, type RoutingKind, type RoutingSnapshot } from '../teamclaude/routing-env'
+import {
+  applyRouting,
+  isStaleTeamclaudeBaseUrl,
+  type RoutingKind,
+  type RoutingSnapshot
+} from '../teamclaude/routing-env'
 import { resolveSetupAgentSequenceLaunchCommand } from '../../shared/setup-agent-sequencing'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import {
@@ -1161,7 +1166,21 @@ export function applyTeamclaudeSeamRouting(
       delete env[key]
     }
     const routed = env.HTTPS_PROXY === `http://127.0.0.1:${snapshot.port}`
-    return { routed, envToDelete: result.envToDelete }
+    // The daemon re-merges its own inherited process.env, which spawn-request
+    // envs deliberately exclude — so a stale TeamClaude base URL living only in
+    // the host's process.env (e.g. a setx AutoRoute leftover) would survive
+    // result.envToDelete and override the proxy. Ride the deletion list when
+    // the inherited value parses as a TeamClaude origin; a corporate/Bedrock
+    // inherited URL is preserved (isStaleTeamclaudeBaseUrl returns false).
+    const envToDelete = [...result.envToDelete]
+    if (
+      routed &&
+      !envToDelete.includes('ANTHROPIC_BASE_URL') &&
+      isStaleTeamclaudeBaseUrl(process.env.ANTHROPIC_BASE_URL, snapshot)
+    ) {
+      envToDelete.push('ANTHROPIC_BASE_URL')
+    }
+    return { routed, envToDelete }
   } catch {
     return { routed: false, envToDelete: [] }
   }

@@ -57,6 +57,27 @@ const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]'])
 /** Parse an `ANTHROPIC_BASE_URL` and decide whether its origin is the TeamClaude
  *  proxy (loopback host + a known owned port). Non-loopback or unknown-port URLs
  *  (corporate gateway, Bedrock, api.anthropic.com) return false → preserved. */
+/**
+ * Whether an inherited `ANTHROPIC_BASE_URL` (e.g. from the daemon host's own
+ * `process.env`, which spawn-request envs deliberately exclude) points at the
+ * TeamClaude proxy and must therefore ride `envToDelete` so the daemon's
+ * re-merge cannot resurrect it. A non-TeamClaude (corporate/Bedrock) value
+ * returns false and is preserved.
+ */
+export function isStaleTeamclaudeBaseUrl(
+  value: string | undefined,
+  snapshot: Pick<RoutingSnapshot, 'knownPorts'>
+): boolean {
+  if (typeof value !== 'string' || value.trim() === '') {
+    return false
+  }
+  try {
+    return isTeamclaudeBaseUrl(value, snapshot.knownPorts)
+  } catch {
+    return false
+  }
+}
+
 function isTeamclaudeBaseUrl(value: string, knownPorts: number[]): boolean {
   let url: URL
   try {
