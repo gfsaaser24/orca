@@ -13385,5 +13385,119 @@
         }
       }
     }
+  },
+  "teamclaude": {
+    "bucket": {
+      "unified5h": "5h",
+      "unified7d": "7d",
+      "fable": "Fable 7d",
+      "sonnet": "Sonnet 7d"
+    },
+    "status": {
+      "active": "Active",
+      "throttled": "Throttled",
+      "exhausted": "Exhausted",
+      "error": "Error",
+      "disabled": "Disabled"
+    },
+    "lifecycle": {
+      "probing": "Probing",
+      "adopted": "Adopted",
+      "adoptedDegraded": "Degraded",
+      "owned": "Owned",
+      "setupNeeded": "Setup needed",
+      "offline": "Offline"
+    },
+    "badge": {
+      "overage": "Over",
+      "stale": "Stale",
+      "throttled": "Throttled",
+      "error": "Error"
+    },
+    "resetsIn": "resets in {{value0}}",
+    "widget": {
+      "label": "TeamClaude usage",
+      "connecting": "Connecting…",
+      "worstBucketLabel": "{{value0}} usage",
+      "unrouted": "Unrouted",
+      "unroutedHint": "A Claude session is running without proxy routing.",
+      "direct": "direct"
+    },
+    "flyout": {
+      "title": "TeamClaude",
+      "manage": "Manage",
+      "pin": "Pin {{value0}}",
+      "unpin": "Unpin {{value0}}",
+      "bucketAria": "{{value0}} {{value1}} usage",
+      "noBucket": "no data",
+      "adoptedDegraded": "Attached to an older proxy; some usage or controls are unavailable.",
+      "offline": "The proxy is offline.",
+      "setupNeeded": "Finish setup to see usage.",
+      "usageUnavailable": "Usage is unavailable right now.",
+      "noAccounts": "No accounts configured.",
+      "pinHint": "Pinned accounts route this session only; the pin clears when the proxy restarts.",
+      "asOf": "as of {{value0}} ago"
+    },
+    "accounts": {
+      "priority": "Priority",
+      "disable": "Disable {{value0}}",
+      "disabled": "Disabled",
+      "empty": "No accounts configured.",
+      "readOnly": "Account controls are unavailable in this state.",
+      "updateNeeded": "Update teamclaude to manage accounts (have v{{have}}, need v{{need}})."
+    },
+    "routes": {
+      "degraded": "This proxy does not support routing edits.",
+      "readOnly": "Routing is unavailable in this state.",
+      "namePlaceholder": "Route name",
+      "remove": "Remove route {{value0}}",
+      "match": "Match globs (comma-separated)",
+      "accounts": "Account IDs (comma-separated)",
+      "matchPlaceholder": "**/*.ts, src/**",
+      "add": "Add route",
+      "reset": "Reset",
+      "apply": "Apply",
+      "updateNeeded": "Update teamclaude to edit routes (have v{{have}}, need v{{need}})."
+    },
+    "activity": {
+      "pending": "live",
+      "empty": "No activity yet.",
+      "time": "Time",
+      "model": "Model",
+      "account": "Account",
+      "status": "Status",
+      "duration": "Duration",
+      "path": "Path",
+      "durationMs": "{{value0}}ms",
+      "offlineBanner": "Proxy offline — showing recent activity."
+    },
+    "proxy": {
+      "status": "Proxy status",
+      "ownership": "Ownership",
+      "owned": "Owned by this Orca",
+      "adopted": "Adopted (external)",
+      "port": "Port",
+      "serverVersion": "Server version",
+      "liveSessions": "Live sessions",
+      "setupGuidance": "Finish TeamClaude setup to start routing.",
+      "finishSetup": "Finish setup",
+      "start": "Start proxy",
+      "stop": "Stop proxy",
+      "adoptedNoStop": "This proxy is managed externally and cannot be stopped from Orca.",
+      "stopTitle": "Stop the proxy?",
+      "stopBodyLive": "Stopping the proxy will interrupt {{value0}} live session(s) currently routing through it.",
+      "stopBodyIdle": "No requests are currently in flight through the proxy.",
+      "cancel": "Cancel",
+      "stopConfirm": "Stop proxy",
+      "inFlightRequests": "In-flight requests",
+      "stopBodyInFlight": "Stopping the proxy will interrupt {{value0}} in-flight request(s) currently routing through it."
+    },
+    "panel": {
+      "title": "TeamClaude",
+      "accounts": "Accounts",
+      "routes": "Routes",
+      "activity": "Activity",
+      "proxy": "Proxy"
+    }
   }
 }
