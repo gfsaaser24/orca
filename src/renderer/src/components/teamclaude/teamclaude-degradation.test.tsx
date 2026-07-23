@@ -196,7 +196,7 @@ describe('adopted-degraded update messaging', () => {
     )
     expect(container.textContent).toContain('Update teamclaude')
     expect(container.textContent).toContain('v1.0.0') // have
-    expect(container.textContent).toContain('v1.5.0') // need (TC_MIN_SERVER_VERSION)
+    expect(container.textContent).toContain('v1.2.0') // need (TC_MIN_SERVER_VERSION)
   })
 
   it('routes: keeps generic copy for plain offline (upgrade would not help)', () => {

@@ -20,7 +20,7 @@ export type BucketKey = 'unified5h' | 'unified7d' | 'unified7dFable' | 'unified7
  * `state.serverVersion`. Lives here (with the readiness derivation) rather than
  * in the frozen contract so it can move without a contract rev.
  */
-export const TC_MIN_SERVER_VERSION = '1.5.0'
+export const TC_MIN_SERVER_VERSION = '1.2.0'
 
 /** Render order for per-account quota bars. */
 export const BUCKET_KEYS: readonly BucketKey[] = [

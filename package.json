@@ -277,6 +277,7 @@
       "@xterm/xterm@6.1.0-beta.287": "config/patches/@xterm__xterm@6.1.0-beta.287.patch"
     }
   },
+  "productName": "Orca TC",
   "reactDoctor": {
     "rules": {
       "react-doctor/js-combine-iterations": "off"
