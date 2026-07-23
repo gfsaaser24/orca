@@ -49,6 +49,7 @@ function makeState(
     bootId: 'boot',
     capabilities: [],
     owned: true,
+    currentAccount: null,
     accounts: [account()],
     routes: [],
     snapshotAt: 0,

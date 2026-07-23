@@ -18,6 +18,8 @@ export const RECLAIM_TOLERANCE_MS = 2000
 /** Adopted-death grace: re-probe for this long before spawning our own. */
 export const ADOPTED_DEATH_WINDOW_MS = 10_000
 export const ADOPTED_DEATH_BASE_MS = 2000
+/** Low-frequency liveness probe after resolver-caused setup-needed. */
+export const RESOLVER_RECOVERY_PROBE_MS = 10_000
 /** Routing-snapshot freshness TTL — bounds a death nobody has noticed. */
 export const SNAPSHOT_TTL_MS = 2000
 /** Previously-owned ports remembered for stale base-URL cleanup. */
@@ -42,6 +44,27 @@ export type EntrypointResolution = {
   env?: NodeJS.ProcessEnv
 }
 
+export type EntrypointResolutionResult =
+  | {
+      kind: 'resolved'
+      resolution: EntrypointResolution
+      foundPath: string
+      attemptedCandidates: string[]
+      nodeFallback: 'path-node' | 'electron-run-as-node'
+    }
+  | {
+      kind: 'not-found'
+      foundPath: null
+      attemptedCandidates: string[]
+      nodeFallback: 'path-node' | 'electron-run-as-node'
+    }
+  | {
+      kind: 'shim-unresolvable'
+      foundPath: string
+      attemptedCandidates: string[]
+      nodeFallback: 'path-node' | 'electron-run-as-node'
+    }
+
 export type ProbeResult = {
   ok: boolean
   version: string | null
@@ -60,9 +83,8 @@ export type SupervisorDeps = {
   probe(): Promise<ProbeResult>
   /** Detached spawn of `node <entry> server --headless`. */
   spawnServer(resolution: EntrypointResolution): SpawnedChild
-  /** Resolve the Node entrypoint from PATH (or the config binPath override).
-   *  Null → unresolvable → setup-needed. */
-  resolveEntrypoint(binPath: string | null): Promise<EntrypointResolution | null>
+  /** Resolve the Node entrypoint from PATH (or the config binPath override). */
+  resolveEntrypoint(binPath: string | null): Promise<EntrypointResolutionResult>
   readMarker(): OwnershipMarker | null
   writeMarker(marker: OwnershipMarker): void
   clearMarker(): void

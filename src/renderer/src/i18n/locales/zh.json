@@ -3040,6 +3040,10 @@
             "runtime_reconnect_attempt": "第 {{value0}} 次尝试"
           },
           "StatusBar": {
+            "openTeamclaudeRoutingDetails": "Open Claude details for TeamClaude routing",
+            "teamclaudeRoutingAccount": "TeamClaude routing account",
+            "teamclaudeRoutingFallback": "TeamClaude routing",
+            "openTeamclaudeCockpit": "Open TeamClaude cockpit",
             "9659e38343": "端口",
             "d1e1a7a6bf": "资源管理器",
             "24ac89df1a": "远程主机",
@@ -4829,6 +4833,11 @@
       },
       "settings": {
         "AccountsPane": {
+          "teamclaudeManagedIntro": "TeamClaude is managing Claude routing and account selection.",
+          "teamclaudeManagedDescription": "TeamClaude owns Claude routing and account selection while connected.",
+          "teamclaudeManagedBadge": "Managed by TeamClaude",
+          "teamclaudeManagedCopy": "Add, sign in, re-authenticate, and switch Claude accounts from the TeamClaude cockpit.",
+          "openTeamclaudeCockpit": "Open TeamClaude cockpit",
           "c2d2751587": "删除账户",
           "dbb9626ed1": "取消",
           "854ebbcc45": "Orca 将删除此已保存账户的托管 Claude 身份验证。如果当前处于活动状态，Orca 将回退到系统默认的 Claude 登录名。",
@@ -13472,6 +13481,10 @@
       "offlineBanner": "Proxy offline — showing recent activity."
     },
     "proxy": {
+      "actionFailed": "The TeamClaude action could not be completed.",
+      "reason": {
+        "generic": "TeamClaude needs attention."
+      },
       "status": "Proxy status",
       "ownership": "Ownership",
       "owned": "Owned by this Orca",

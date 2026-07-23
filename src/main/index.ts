@@ -1874,6 +1874,21 @@ app.whenReady().then(async () => {
   codexUsage = new CodexUsageStore(store)
   openCodeUsage = new OpenCodeUsageStore(store)
   rateLimits = new RateLimitService()
+  // Why: establish TeamClaude's initial-state barrier before native auth's
+  // constructor sync so startup cannot rotate credentials under routed work.
+  initTeamclaude({
+    nativeAccounts: () =>
+      (store?.getSettings().claudeManagedAccounts ?? []).map((account) => ({
+        id: account.id,
+        email: account.email,
+        accountUuid: account.accountUuid ?? null,
+        organizationUuid: account.organizationUuid ?? null,
+        organizationName: account.organizationName ?? null
+      })),
+    // Why: proxy disconnect must stale fleet meters and schedule native fallback
+    // immediately; waiting for the next polling interval prolongs wrong data.
+    onConnectionChange: (connected) => rateLimits?.handleTeamclaudeConnectionChange(connected)
+  })
   codexRuntimeHome = new CodexRuntimeHomeService(store)
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome)
   claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
@@ -2256,11 +2271,6 @@ app.whenReady().then(async () => {
   registerMobileHandlers(runtimeRpc, { getRelayStatus: () => desktopRelayStatus })
 
   startTerminalRuntimeStartupServices()
-  // Why: TeamClaude adopt-or-spawn supervisor + fleet client is an app-lifetime
-  // singleton (spec §4 module lifecycle). Initialize once here on the
-  // app-lifetime path — never from attachMainWindowServices, which re-runs on
-  // window recreation and would duplicate SSE connections/spawns/marker churn.
-  initTeamclaude()
   app.on('activate', requestDesktopActivation)
 
   if (serveOptions) {

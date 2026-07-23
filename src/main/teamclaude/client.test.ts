@@ -152,6 +152,7 @@ describe('parseStatus — quota + pin mapping (real server shape)', () => {
     version: '1.2.3',
     bootId: 'boot-9',
     capabilities: ALL_CAPS,
+    currentAccount: 'work',
     manualAccount: 'work',
     accounts: [
       {
@@ -207,6 +208,78 @@ describe('parseStatus — quota + pin mapping (real server shape)', () => {
   it('no pin (manualAccount null) → nobody pinned', () => {
     const snap = parseStatus({ ...status, manualAccount: null })
     expect(snap.accounts.every((a) => !a.pinned)).toBe(true)
+  })
+
+  it('carries the routing currentAccount and joins fleet identities to Orca accounts', () => {
+    const snap = parseStatus(
+      {
+        ...status,
+        accounts: [
+          { ...status.accounts[0], id: 'uuid-1::org-1' },
+          { ...status.accounts[1], id: 'uuid-2::org-2', email: 'fallback@example.com' }
+        ]
+      },
+      [
+        {
+          id: 'orca-stable',
+          accountUuid: 'uuid-1',
+          organizationUuid: 'org-1',
+          email: 'different@example.com'
+        },
+        {
+          id: 'orca-email',
+          accountUuid: null,
+          organizationUuid: null,
+          email: 'fallback@example.com'
+        }
+      ]
+    )
+
+    expect(snap.currentAccount).toBe('work')
+    expect(snap.accounts.map((account) => account.orcaAccountId)).toEqual([
+      'orca-stable',
+      'orca-email'
+    ])
+  })
+
+  it('does not use an ambiguous email fallback for the fleet/native join', () => {
+    const snap = parseStatus(
+      { accounts: [{ id: 'name:shared', name: 'shared', email: 'same@example.com' }] },
+      [
+        { id: 'orca-1', accountUuid: null, organizationUuid: null, email: 'same@example.com' },
+        { id: 'orca-2', accountUuid: null, organizationUuid: null, email: 'same@example.com' }
+      ]
+    )
+    expect(snap.accounts[0].orcaAccountId).toBeNull()
+  })
+
+  it('joins a stable UUID through an organization name or a unique legacy UUID', () => {
+    const snap = parseStatus(
+      {
+        accounts: [
+          { id: 'uuid-name::Acme', name: 'named-org' },
+          { id: 'uuid-legacy::', name: 'legacy-org' }
+        ]
+      },
+      [
+        {
+          id: 'orca-name',
+          accountUuid: 'uuid-name',
+          organizationName: 'Acme',
+          email: 'named@example.com'
+        },
+        {
+          id: 'orca-legacy',
+          accountUuid: 'uuid-legacy',
+          email: 'legacy@example.com'
+        }
+      ]
+    )
+
+    expect(snap.accounts.map((account) => account.orcaAccountId)).toEqual([
+      'orca-name',
+      'orca-legacy'
+    ])
   })
 })
 

@@ -87,6 +87,9 @@ import {
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
+import { useTeamclaude } from '@/hooks/useTeamclaude'
+import { openTeamclaudeCockpit } from '@/components/teamclaude/teamclaude-cockpit-event'
+import { resolveTeamclaudeStatusIdentity } from './teamclaude-status-identity'
 
 type StatusBarProps = {
   floatingTerminalOpen: boolean
@@ -690,6 +693,8 @@ function ClaudeSwitcherMenu({
   const claudeTarget = useAppStore((s) => s.rateLimits.claudeTarget)
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const { state: teamclaudeState } = useTeamclaude()
+  const teamclaudeIdentity = resolveTeamclaudeStatusIdentity(teamclaudeState)
   const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
   const providerAccountHostLabel = hasActiveRuntimeEnvironment
@@ -828,6 +833,45 @@ function ClaudeSwitcherMenu({
   const selectedGroup =
     switchGroups.find((group) => group.key === selectedRuntimeKey) ?? switchGroups[0]
   const activeTarget = selectedGroup?.targets.find((target) => target.active)
+
+  if (teamclaudeIdentity.connected) {
+    return (
+      <ProviderDetailsMenu
+        provider={claude}
+        compact={compact}
+        iconOnly={iconOnly}
+        ariaLabel={translate(
+          'auto.components.status.bar.StatusBar.openTeamclaudeRoutingDetails',
+          'Open Claude details for TeamClaude routing'
+        )}
+        open={open}
+        onOpenChange={handleOpenChange}
+      >
+        <DropdownMenuLabel>
+          {translate(
+            'auto.components.status.bar.StatusBar.teamclaudeRoutingAccount',
+            'TeamClaude routing account'
+          )}
+        </DropdownMenuLabel>
+        <DropdownMenuItem disabled>
+          <span className="max-w-[220px] truncate text-[12px] text-foreground">
+            {teamclaudeIdentity.label ??
+              translate(
+                'auto.components.status.bar.StatusBar.teamclaudeRoutingFallback',
+                'TeamClaude routing'
+              )}
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={openTeamclaudeCockpit}>
+          {translate(
+            'auto.components.status.bar.StatusBar.openTeamclaudeCockpit',
+            'Open TeamClaude cockpit'
+          )}
+        </DropdownMenuItem>
+      </ProviderDetailsMenu>
+    )
+  }
 
   return (
     <ProviderDetailsMenu

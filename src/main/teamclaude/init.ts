@@ -1,37 +1,17 @@
-/**
- * TeamClaude app-lifetime singleton. Spec §4 (module lifecycle).
- *
- * Wires config-watch → supervisor → client → control → IPC, assembles the
- * contract `TcState`, and owns the routing snapshot the seam wave reads. This is
- * a daemon-init-style singleton: it initializes ONCE from the app-lifetime path
- * in `index.ts` (NOT from window recreation, which would duplicate SSE
- * connections, spawns, and marker churn). Only the `tc:state` push target
- * rebinds per window, handled inside `TeamclaudeIpc` via `getAllWindows()`.
- *
- * On a config port/apiKey change the client + supervisor are torn down and
- * re-initialized; a port change stops the old owned process FIRST (teamclaude
- * binds once and /reload does not rebind — an orphan would squat the old port).
- */
-import { app } from 'electron'
+/** App-lifetime TeamClaude singleton; window recreation only rebinds IPC push targets.
+ * Config changes rebuild client/supervisor and kill an owned process before a port move. */
 import { TeamclaudeConfigWatcher, type TcConnectionConfig } from './config'
 import { Supervisor } from './supervisor'
-import type { SupervisorConfig, SupervisorDeps, SupervisorTransition } from './supervisor-types'
-import {
-  resolveNodeEntrypoint,
-  spawnServerProcess,
-  readMarkerFile,
-  writeMarkerFile,
-  clearMarkerFile,
-  markerPath,
-  processAlive,
-  processStartTime,
-  killProcess
-} from './supervisor-runtime'
+import type { SupervisorTransition } from './supervisor-types'
 import { TeamclaudeClient, deriveReadiness, type TcStatusSnapshot } from './client'
+import type { TcNativeAccountIdentity } from './client-mapping'
 import { TeamclaudeControl } from './control'
 import { TeamclaudeIpc } from './ipc'
 import { applyRouting, type RoutingKind, type RoutingSnapshot } from './routing-env'
-import type { TcAccount, TcReadiness, TcState } from '../../shared/teamclaude-types'
+import type { TcAccount, TcProxyStartResult, TcState } from '../../shared/teamclaude-types'
+import { getProxyStartBlocker, getProxyStartCompletion } from './proxy-start-result'
+import { createSupervisorProductionWiring } from './supervisor-production-wiring'
+import { createEmptyTcState, ZERO_READINESS } from './teamclaude-state-defaults'
 
 /** Read-only view of the fleet usage state for the rate-limit short-circuit
  *  (spec §4). Empty/nullable when not connected or usage capability is absent. */
@@ -48,7 +28,10 @@ const CONNECTED: ReadonlySet<TcState['lifecycle']> = new Set([
   'adopted-degraded',
   'owned'
 ])
-const ZERO_READINESS: TcReadiness = { usageReady: false, routingReady: false, controlReady: false }
+export type TeamclaudeInitOptions = {
+  nativeAccounts?: () => readonly TcNativeAccountIdentity[]
+  onConnectionChange?: (connected: boolean) => void
+}
 
 class TeamclaudeService {
   private readonly watcher: TeamclaudeConfigWatcher
@@ -58,16 +41,34 @@ class TeamclaudeService {
   private control: TeamclaudeControl | null = null
   private config: TcConnectionConfig | null = null
 
-  private state: TcState = emptyState(DEFAULT_PORT)
+  private state: TcState = createEmptyTcState(DEFAULT_PORT)
 
-  constructor() {
+  constructor(private readonly options: TeamclaudeInitOptions = {}) {
     this.watcher = new TeamclaudeConfigWatcher()
     this.ipc = new TeamclaudeIpc({
+      getState: () => this.state,
       pin: (accountId) => this.control?.pin(accountId) ?? notReady(),
       setRoutes: (routes) => this.control?.setRoutes(routes) ?? notReady(),
       setAccount: (payload) => this.control?.setAccount(payload) ?? notReady(),
-      proxyStart: async () => {
-        await this.supervisor?.retry()
+      proxyStart: async (): Promise<TcProxyStartResult> => {
+        const supervisor = this.supervisor
+        const blocker = getProxyStartBlocker(this.config !== null, supervisor !== null)
+        if (blocker) {
+          return blocker
+        }
+        try {
+          await supervisor!.retry()
+          if (this.supervisor !== supervisor) {
+            return getProxyStartBlocker(true, false)!
+          }
+          return getProxyStartCompletion(supervisor!.state)
+        } catch (error) {
+          return {
+            ok: false,
+            reason: 'start-failed',
+            message: error instanceof Error ? error.message : 'TeamClaude could not be started.'
+          }
+        }
       },
       proxyStop: async (args) => {
         // D5 consent audit trail: the renderer's stop confirmation echoes how many
@@ -127,10 +128,19 @@ class TeamclaudeService {
     const connected = CONNECTED.has(this.state.lifecycle)
     const usageReady = connected && this.state.readiness.usageReady
     const accounts = usageReady ? this.state.accounts : []
-    // Active-meter selection (spec §4): pinned, else first non-disabled, else first.
-    const active =
-      accounts.find((a) => a.pinned) ?? accounts.find((a) => a.status !== 'disabled') ?? accounts[0]
-    return { connected, usageReady, accounts, activeAccountName: active?.name ?? null }
+    return {
+      connected,
+      usageReady,
+      accounts,
+      activeAccountName: usageReady ? this.state.currentAccount : null
+    }
+  }
+
+  noteUnroutedLaunch(reason: string): void {
+    this.patchState({
+      reasonKey: 'launchedUnrouted',
+      reasonDetail: `Claude launched unrouted (${reason})`
+    })
   }
 
   private async onConfigChange(next: TcConnectionConfig | null): Promise<void> {
@@ -154,8 +164,12 @@ class TeamclaudeService {
   }
 
   private async spinUp(config: TcConnectionConfig): Promise<void> {
-    this.state = { ...emptyState(config.port), snapshotAt: Date.now() }
-    const client = new TeamclaudeClient({ port: config.port, apiKey: config.apiKey })
+    this.state = { ...createEmptyTcState(config.port), snapshotAt: Date.now() }
+    const client = new TeamclaudeClient({
+      port: config.port,
+      apiKey: config.apiKey,
+      nativeAccounts: this.options.nativeAccounts
+    })
     const control = new TeamclaudeControl({ port: config.port, apiKey: config.apiKey })
     this.client = client
     this.control = control
@@ -164,7 +178,8 @@ class TeamclaudeService {
     client.on('activity', (rows) => this.ipc.pushActivity(rows))
     client.on('pollError', () => this.supervisor?.invalidateSnapshot())
 
-    const supervisor = new Supervisor(toSupervisorConfig(config), buildDeps(client, config))
+    const supervisorWiring = createSupervisorProductionWiring(client, config)
+    const supervisor = new Supervisor(supervisorWiring.config, supervisorWiring.deps)
     this.supervisor = supervisor
     supervisor.on('transition', (t) => void this.onTransition(t, control, supervisor))
 
@@ -212,92 +227,41 @@ class TeamclaudeService {
   }
 
   private onStatus(snapshot: TcStatusSnapshot): void {
+    void this.supervisor?.reAdoptHealthyListener({
+      ok: true,
+      version: snapshot.serverVersion,
+      capabilities: snapshot.capabilities,
+      bootId: snapshot.bootId
+    })
     const capabilities = snapshot.capabilities
     this.patchState({
       serverVersion: snapshot.serverVersion ?? this.state.serverVersion,
       bootId: snapshot.bootId ?? this.state.bootId,
       capabilities,
+      currentAccount: snapshot.currentAccount,
       accounts: snapshot.accounts,
       routes: snapshot.routes
     })
   }
 
   private patchState(patch: Partial<TcState>): void {
+    const wasConnected = CONNECTED.has(this.state.lifecycle)
     const merged: TcState = { ...this.state, ...patch, snapshotAt: Date.now() }
     merged.readiness = CONNECTED.has(merged.lifecycle)
       ? deriveReadiness(merged.capabilities)
       : ZERO_READINESS
     this.state = merged
     this.ipc.pushState(merged)
+    const connected = CONNECTED.has(merged.lifecycle)
+    if (connected !== wasConnected) {
+      this.options.onConnectionChange?.(connected)
+    }
   }
 
   async dispose(): Promise<void> {
     this.watcher.stop()
     await this.tearDown({ killOwned: false })
     this.ipc.dispose()
-  }
-}
-
-function toSupervisorConfig(config: TcConnectionConfig): SupervisorConfig {
-  return { port: config.port, apiKey: config.apiKey, binPath: config.binPath }
-}
-
-function buildDeps(client: TeamclaudeClient, config: TcConnectionConfig): SupervisorDeps {
-  const userData = safeUserData()
-  const marker = markerPath(userData)
-  return {
-    probe: async () => {
-      try {
-        const s = await client.fetchStatus()
-        return {
-          ok: true,
-          version: s.serverVersion,
-          capabilities: s.capabilities,
-          bootId: s.bootId
-        }
-      } catch {
-        return { ok: false, version: null, capabilities: [], bootId: null }
-      }
-    },
-    spawnServer: (resolution) => spawnServerProcess(resolution, {}, userData),
-    resolveEntrypoint: (binPath) => resolveNodeEntrypoint(binPath ?? config.binPath),
-    readMarker: () => readMarkerFile(marker),
-    writeMarker: (m) => writeMarkerFile(marker, m),
-    clearMarker: () => clearMarkerFile(marker),
-    processAlive,
-    killPid: killProcess,
-    processStartTime,
-    isSupported: (capabilities) => deriveReadiness(capabilities).routingReady,
-    now: Date.now,
-    random: Math.random,
-    setTimeoutFn: setTimeout,
-    clearTimeoutFn: clearTimeout,
-    watchdogMs: 4000
-  }
-}
-
-function safeUserData(): string {
-  try {
-    return app.getPath('userData')
-  } catch {
-    return process.cwd()
-  }
-}
-
-function emptyState(port: number): TcState {
-  return {
-    lifecycle: 'probing',
-    readiness: ZERO_READINESS,
-    reasonKey: null,
-    reasonDetail: null,
-    port,
-    serverVersion: null,
-    bootId: null,
-    capabilities: [],
-    owned: false,
-    accounts: [],
-    routes: [],
-    snapshotAt: Date.now()
   }
 }
 
@@ -308,18 +272,30 @@ function notReady(): Promise<{ ok: false; error: string }> {
 // --- module singleton -------------------------------------------------------
 
 let singleton: TeamclaudeService | null = null
+let initialStateReady: Promise<void> | null = null
 
 /**
  * Initialize the TeamClaude integration exactly once. Call from the app-lifetime
  * startup path in `index.ts` (alongside daemon/agent-hook startup), NEVER from a
  * window-recreation path. Idempotent: a second call is a no-op.
  */
-export function initTeamclaude(): void {
+export function initTeamclaude(options: TeamclaudeInitOptions = {}): void {
   if (singleton) {
     return
   }
-  singleton = new TeamclaudeService()
-  void singleton.start()
+  singleton = new TeamclaudeService(options)
+  initialStateReady = singleton.start().catch((error) => {
+    console.warn(
+      '[teamclaude] Initial state probe failed:',
+      error instanceof Error ? error.message : String(error)
+    )
+  })
+}
+
+/** Native-auth mutations wait for the initial TeamClaude probe so app startup
+ * cannot rotate credentials while an already-running proxy owns routing. */
+export function waitForTeamclaudeInitialState(): Promise<void> {
+  return initialStateReady ?? Promise.resolve()
 }
 
 /** Fleet usage snapshot for the rate-limit short-circuit (spec §4). Empty-safe:
@@ -360,10 +336,17 @@ export function setOrcaNetworkProxyConfigured(configured: boolean): void {
   singleton?.setOrcaNetworkProxyConfigured(configured)
 }
 
+/** Persist the launch-time direct-fallback signal consumed by the cockpit. */
+export function noteTeamclaudeUnroutedLaunch(reason: string): void {
+  singleton?.noteUnroutedLaunch(reason)
+}
+
 export async function disposeTeamclaude(): Promise<void> {
   if (!singleton) {
     return
   }
+  await waitForTeamclaudeInitialState()
   await singleton.dispose()
   singleton = null
+  initialStateReady = null
 }

@@ -9,7 +9,7 @@ const DOWN_SNAPSHOT: RoutingSnapshot = {
   orcaNetworkProxyConfigured: false
 }
 
-const { snapshotRef } = vi.hoisted(() => ({
+const { snapshotRef, markUnrouted } = vi.hoisted(() => ({
   snapshotRef: {
     current: {
       proxyUp: false,
@@ -18,11 +18,13 @@ const { snapshotRef } = vi.hoisted(() => ({
       knownPorts: [3456] as number[],
       orcaNetworkProxyConfigured: false
     }
-  }
+  },
+  markUnrouted: vi.fn()
 }))
 
 vi.mock('../teamclaude/init', () => ({
-  getTeamclaudeRoutingSnapshot: () => snapshotRef.current
+  getTeamclaudeRoutingSnapshot: () => snapshotRef.current,
+  noteTeamclaudeUnroutedLaunch: markUnrouted
 }))
 
 import {
@@ -43,6 +45,7 @@ function setRouted(): void {
 
 afterEach(() => {
   snapshotRef.current = { ...DOWN_SNAPSHOT }
+  markUnrouted.mockClear()
 })
 
 describe('isTeamclaudeClaudeFamilyLaunch (spec §4 predicate)', () => {
@@ -88,6 +91,7 @@ describe('applyTeamclaudeSeamRouting (spec §4 seams 1/2)', () => {
     expect(env.HTTPS_PROXY).toBe('http://127.0.0.1:3456')
     expect(env.NODE_EXTRA_CA_CERTS).toBe('C:\\certs\\tc-ca.pem')
     expect(result.routed).toBe(true)
+    expect(markUnrouted).not.toHaveBeenCalled()
   })
 
   it('propagates a stale TeamClaude base URL through envToDelete (daemon re-merge safety)', () => {
@@ -180,6 +184,7 @@ describe('applyTeamclaudeSeamRouting (spec §4 seams 1/2)', () => {
     applyTeamclaudeSeamRouting(env, 'agent', { ...baseCtx })
     expect(env.TEAMCLAUDE_RUN_GUARD).toBe('1')
     expect(env.HTTPS_PROXY).toBeUndefined()
+    expect(markUnrouted).toHaveBeenCalledWith('proxy-down')
   })
 })
 

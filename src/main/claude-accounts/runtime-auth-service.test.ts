@@ -3841,6 +3841,42 @@ describe('ClaudeRuntimeAuthService', () => {
     vi.mocked(refreshClaudeOauthCredentials).mockResolvedValue(null)
   })
 
+  it('centrally suppresses token rotation on constructor, sync, reauth, and rate-limit paths while TeamClaude is connected', async () => {
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const existing = createClaudeCredentialsJson('one@example.com', 'one-token', null, 1_000)
+    const refreshed = createClaudeCredentialsJson(
+      'one@example.com',
+      'one-refreshed',
+      null,
+      9_999_999_999_999
+    )
+    const managedAuthPath = createManagedClaudeAuth(testState.userDataDir, 'account-1', existing)
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('account-1', managedAuthPath, { email: 'one@example.com' })
+      ],
+      activeClaudeManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+    const connected = vi.fn(() => true)
+    vi.mocked(isOauthTokenExpiring).mockReturnValue(true)
+    vi.mocked(refreshClaudeOauthCredentials).mockResolvedValue(refreshed)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never, connected)
+    await service.syncForCurrentSelection()
+    await service.prepareForRateLimitFetch()
+    await service.forceMaterializeCurrentSelectionForRollback()
+
+    expect(connected).toHaveBeenCalled()
+    expect(refreshClaudeOauthCredentials).not.toHaveBeenCalled()
+    expect(readFileSync(runtimeCredentialsPath, 'utf8')).toBe(existing)
+
+    connected.mockReturnValue(false)
+    await service.syncForCurrentSelection()
+    expect(refreshClaudeOauthCredentials).toHaveBeenCalledWith(existing)
+  })
+
   it('does not refresh the active account while a Claude PTY is live', async () => {
     const expired = createClaudeCredentialsJson('one@example.com', 'one-expired', null, 1_000)
     const managedAuthPath1 = createManagedClaudeAuth(testState.userDataDir, 'account-1', expired)

@@ -978,9 +978,9 @@ export class ClaudeAccountService {
                 '--',
                 'bash',
                 '-lc',
-                `export CLAUDE_CONFIG_DIR=${shellQuote(configDir.linuxPath)}; exec claude ${args.map(shellQuote).join(' ')}`
+                `export TEAMCLAUDE_RUN_GUARD=1; export CLAUDE_CONFIG_DIR=${shellQuote(configDir.linuxPath)}; exec claude ${args.map(shellQuote).join(' ')}`
               ],
-              env: process.env,
+              env: { ...process.env, TEAMCLAUDE_RUN_GUARD: '1' },
               shell: false
             }
           : {
@@ -988,6 +988,7 @@ export class ClaudeAccountService {
               args,
               env: {
                 ...process.env,
+                TEAMCLAUDE_RUN_GUARD: '1',
                 CLAUDE_CONFIG_DIR: configDir.windowsPath
               },
               shell: process.platform === 'win32'

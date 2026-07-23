@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'
 import type { TcActivityRow, TcState } from '../../../../shared/teamclaude-types'
-import type { TeamclaudeControls } from '@/hooks/useTeamclaude'
+import type { TeamclaudeControlError, TeamclaudeControls } from '@/hooks/useTeamclaude'
 import { AccountsTab } from './panel/AccountsTab'
 import { RoutesTab } from './panel/RoutesTab'
 import { ActivityTab } from './panel/ActivityTab'
@@ -21,6 +21,7 @@ export type TeamclaudePanelProps = {
   state: TcState | null
   activity: TcActivityRow[]
   controls: TeamclaudeControls
+  controlError: TeamclaudeControlError | null
 }
 
 export function TeamclaudePanel({
@@ -28,7 +29,8 @@ export function TeamclaudePanel({
   onOpenChange,
   state,
   activity,
-  controls
+  controls,
+  controlError
 }: TeamclaudePanelProps): React.JSX.Element {
   const { t } = useTranslation()
   const gates = surfaceGates(state)
@@ -55,7 +57,12 @@ export function TeamclaudePanel({
             <ActivityTab activity={activity} offline={gates.offline} />
           </TabsContent>
           <TabsContent value="proxy">
-            <ProxyTab state={state} activity={activity} controls={controls} />
+            <ProxyTab
+              state={state}
+              activity={activity}
+              controls={controls}
+              controlError={controlError}
+            />
           </TabsContent>
         </Tabs>
       </DialogContent>

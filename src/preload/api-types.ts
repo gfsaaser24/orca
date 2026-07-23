@@ -12,6 +12,7 @@ import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type {
   TcAccountSetPayload,
   TcActivityRow,
+  TcProxyStartResult,
   TcRoute,
   TcState
 } from '../shared/teamclaude-types'
@@ -22,10 +23,11 @@ export type TeamclaudeControlResult = { ok: boolean; error?: string; status?: nu
 export type TeamclaudeApi = {
   onState: (callback: (state: TcState) => void) => () => void
   onActivity: (callback: (rows: TcActivityRow[]) => void) => () => void
+  getState: () => Promise<TcState>
   pin: (accountId: string | null) => Promise<TeamclaudeControlResult>
   setRoutes: (routes: TcRoute[]) => Promise<TeamclaudeControlResult>
   setAccount: (payload: TcAccountSetPayload) => Promise<TeamclaudeControlResult>
-  startProxy: () => Promise<void>
+  startProxy: () => Promise<TcProxyStartResult>
   stopProxy: (args: { confirmLiveSessions: number }) => Promise<void>
   logTail: () => Promise<TcActivityRow[]>
 }

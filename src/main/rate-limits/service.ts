@@ -96,6 +96,8 @@ const INDIVIDUALLY_REFRESHABLE_PROVIDERS: ReadonlySet<ActiveRateLimitProvider> =
 ])
 const STALE_THRESHOLD_MS = 30 * 60 * 1000 // 30 minutes — after this, stale data is dropped
 const INACTIVE_FETCH_DEBOUNCE_MS = 60 * 1000 // 60 seconds — debounce fetch-on-open
+const TEAMCLAUDE_FALLBACK_BASE_MS = 1000
+const TEAMCLAUDE_FALLBACK_JITTER_MS = 4000
 
 // --- TeamClaude fleet → ProviderRateLimits mapping (spec §4) ----------------
 // A TcQuotaBucket already carries usedPercent 0–100 (clamped upstream) and
@@ -203,6 +205,8 @@ export class RateLimitService {
   private pollInterval: number = DEFAULT_POLL_MS
   private timer: ReturnType<typeof setInterval> | null = null
   private deferredStartupRefreshTimer: ReturnType<typeof setTimeout> | null = null
+  private teamclaudeFallbackTimer: ReturnType<typeof setTimeout> | null = null
+  private teamclaudeConnected = false
   // Why: after the first recovery attempt, repeated focus/show/restore events
   // during the same outage should not create a tight provider retry loop.
   private lastActiveFailureRetryAtByProvider: Record<ActiveRateLimitProvider, number> = {
@@ -320,6 +324,33 @@ export class RateLimitService {
     this.pruneInactiveCodexState()
   }
 
+  handleTeamclaudeConnectionChange(connected: boolean): void {
+    if (connected === this.teamclaudeConnected) {
+      return
+    }
+    this.teamclaudeConnected = connected
+    if (connected) {
+      this.clearTeamclaudeFallback()
+      this.shortCircuitClaudeUsageIfConnected()
+      if (this.inactiveClaudeAccountsResolver) {
+        this.applyTeamclaudeInactiveClaudeUsage()
+      }
+      return
+    }
+
+    this.markTeamclaudeReadingsStale()
+    if (this.claudeFetchTarget.runtime !== 'host' || this.teamclaudeFallbackTimer) {
+      return
+    }
+    const delay =
+      TEAMCLAUDE_FALLBACK_BASE_MS + Math.floor(Math.random() * TEAMCLAUDE_FALLBACK_JITTER_MS)
+    this.teamclaudeFallbackTimer = setTimeout(() => {
+      this.teamclaudeFallbackTimer = null
+      void this.fetchClaudeOnly({ force: true })
+    }, delay)
+    this.teamclaudeFallbackTimer.unref?.()
+  }
+
   attach(mainWindow: BrowserWindow): void {
     this.detachWindowListeners?.()
     this.mainWindow = mainWindow
@@ -367,6 +398,7 @@ export class RateLimitService {
     this.resolveAndClearFetchIdleWaiters()
     this.stopTimer()
     this.clearDeferredStartupRefresh()
+    this.clearTeamclaudeFallback()
     this.detachWindowListeners?.()
     this.detachWindowListeners = null
     this.mainWindow = null
@@ -812,6 +844,13 @@ export class RateLimitService {
     }
   }
 
+  private clearTeamclaudeFallback(): void {
+    if (this.teamclaudeFallbackTimer) {
+      clearTimeout(this.teamclaudeFallbackTimer)
+      this.teamclaudeFallbackTimer = null
+    }
+  }
+
   private shouldBackgroundPoll(): boolean {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
       return false
@@ -1075,6 +1114,30 @@ export class RateLimitService {
     }
     const usage = getTeamclaudeUsageSnapshot()
     return usage.connected && usage.usageReady
+  }
+
+  private markTeamclaudeReadingsStale(): void {
+    const stale = (limits: ProviderRateLimits | null): ProviderRateLimits | null => {
+      if (
+        !limits ||
+        (limits.usageMetadata?.source !== 'teamclaude' &&
+          limits.usageMetadata?.lastSuccessfulSource !== 'teamclaude')
+      ) {
+        return limits
+      }
+      return {
+        ...limits,
+        status: 'error',
+        error: 'TeamClaude disconnected; refreshing native Claude usage.'
+      }
+    }
+    for (const [accountId, limits] of this.inactiveClaudeCache) {
+      const next = stale(limits)
+      if (next) {
+        this.inactiveClaudeCache.set(accountId, next)
+      }
+    }
+    this.updateState({ ...this.state, claude: stale(this.state.claude) })
   }
 
   private buildTeamclaudeClaudeRateLimits(): ProviderRateLimits {

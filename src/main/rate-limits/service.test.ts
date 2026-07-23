@@ -1168,6 +1168,69 @@ describe('RateLimitService', () => {
       expect(inactive?.rateLimits?.usageMetadata?.source).toBe('teamclaude')
       expect(inactive?.rateLimits?.session?.usedPercent).toBe(42)
     })
+
+    it('marks fleet meters stale and schedules exactly one jittered native fallback', async () => {
+      vi.useFakeTimers()
+      const random = vi.spyOn(Math, 'random').mockReturnValue(0.5)
+      try {
+        mockFreshBackgroundProviderFetches()
+        const service = new RateLimitService()
+        service.setInactiveClaudeAccountsResolver(() => [
+          { id: 'orca-1', email: 'alice@example.com' } as never
+        ])
+        connectFleet([fleetAccount({ orcaAccountId: 'orca-1' })], 'alice')
+        await service.refresh()
+        await service.fetchInactiveClaudeAccountsOnOpen()
+        service.handleTeamclaudeConnectionChange(true)
+
+        usageRef.current = {
+          connected: false,
+          usageReady: false,
+          accounts: [],
+          activeAccountName: null
+        }
+        vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 7, Date.now()))
+        vi.mocked(fetchClaudeRateLimits).mockClear()
+        service.handleTeamclaudeConnectionChange(false)
+        service.handleTeamclaudeConnectionChange(false)
+
+        expect(service.getState().claude?.status).toBe('error')
+        expect(
+          service.getState().inactiveClaudeAccounts.find((entry) => entry.accountId === 'orca-1')
+            ?.rateLimits?.status
+        ).toBe('error')
+        expect(vi.getTimerCount()).toBe(1)
+
+        await vi.runOnlyPendingTimersAsync()
+        expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+      } finally {
+        random.mockRestore()
+        vi.useRealTimers()
+      }
+    })
+
+    it('cancels the pending native fallback when the proxy recovers', () => {
+      vi.useFakeTimers()
+      try {
+        const service = new RateLimitService()
+        connectFleet([fleetAccount()], 'alice')
+        service.handleTeamclaudeConnectionChange(true)
+        usageRef.current = {
+          connected: false,
+          usageReady: false,
+          accounts: [],
+          activeAccountName: null
+        }
+        service.handleTeamclaudeConnectionChange(false)
+        expect(vi.getTimerCount()).toBe(1)
+
+        connectFleet([fleetAccount()], 'alice')
+        service.handleTeamclaudeConnectionChange(true)
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
   })
 
   it('passes the selected WSL Codex home into active account rate-limit fetches', async () => {

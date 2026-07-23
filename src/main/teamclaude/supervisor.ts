@@ -27,7 +27,6 @@ import type { RoutingSnapshot } from './routing-env'
 import {
   NO_ACCOUNTS_EXIT_CODE,
   BACKOFF_CAP,
-  RECLAIM_TOLERANCE_MS,
   SNAPSHOT_TTL_MS,
   PORT_HISTORY
 } from './supervisor-types'
@@ -40,6 +39,8 @@ import type {
   SupervisorConfig,
   SupervisorDeps
 } from './supervisor-types'
+import { markerProvesOwnership } from './supervisor-ownership-proof'
+import { resolverFailureDetail } from './supervisor-resolver-evidence'
 
 export class Supervisor extends EventEmitter {
   private readonly deps: SupervisorDeps
@@ -127,6 +128,23 @@ export class Supervisor extends EventEmitter {
     await this.start()
   }
 
+  /** A successful client poll is equivalent to a recovery probe. Only dormant
+   * states may re-adopt so normal status polling cannot reset supervision. */
+  async reAdoptHealthyListener(probe: ProbeResult): Promise<void> {
+    if (
+      !probe.ok ||
+      this.stopping ||
+      this.child ||
+      (this.lifecycle !== 'setup-needed' && this.lifecycle !== 'offline')
+    ) {
+      return
+    }
+    this.owned = false
+    this.generation++
+    this.timers.clearAll()
+    await this.onProbeUp(probe)
+  }
+
   /**
    * Stop supervision. By default the detached owned server is LEFT RUNNING
    * (reclaimed on next launch). `killOwned` (quit-with-stop toggle, or a
@@ -162,15 +180,7 @@ export class Supervisor extends EventEmitter {
    *  NO kill (the pid may have been recycled by an unrelated process). */
   private async killOwnedByMarker(): Promise<void> {
     const marker = this.deps.readMarker()
-    if (!marker || marker.port !== this.port) {
-      return
-    }
-    if (!this.deps.processAlive(marker.pid)) {
-      return
-    }
-    const started = await this.deps.processStartTime(marker.pid)
-    if (started === null || Math.abs(started - marker.startedAt) > RECLAIM_TOLERANCE_MS) {
-      // Not provably ours — leave it alone.
+    if (!marker || !(await markerProvesOwnership(marker, this.port, this.deps))) {
       return
     }
     this.deps.killPid(marker.pid)
@@ -224,38 +234,32 @@ export class Supervisor extends EventEmitter {
 
   /** Reclaim only if the live listener is provably our previously-owned one. */
   private async tryReclaim(): Promise<boolean> {
-    const marker = this.deps.readMarker()
-    if (!marker) {
-      return false
-    }
-    if (marker.port !== this.port) {
-      return false
-    }
-    if (!this.deps.processAlive(marker.pid)) {
-      return false
-    }
-    const started = await this.deps.processStartTime(marker.pid)
-    if (started === null) {
-      return false
-    }
-    return Math.abs(started - marker.startedAt) <= RECLAIM_TOLERANCE_MS
+    return markerProvesOwnership(this.deps.readMarker(), this.port, this.deps)
   }
 
   private async spawnFlow(): Promise<void> {
     const gen = this.generation
-    const resolution = await this.deps.resolveEntrypoint(this.binPath)
+    const result = await this.deps.resolveEntrypoint(this.binPath)
     if (gen !== this.generation) {
       return
     }
-    if (!resolution) {
+    if (result.kind !== 'resolved') {
+      const detail = resolverFailureDetail(result)
+      console.warn('[teamclaude] entrypoint resolution failed', {
+        kind: result.kind,
+        foundPath: result.foundPath,
+        attemptedCandidates: result.attemptedCandidates,
+        nodeFallback: result.nodeFallback
+      })
       this.transition(
         'setup-needed',
-        'tc.reason.setupNeeded',
-        'teamclaude not found or its Node entrypoint could not be resolved'
+        result.kind === 'not-found' ? 'tc.reason.teamclaudeNotFound' : 'tc.reason.shimUnresolvable',
+        detail
       )
+      this.liveness.startResolverRecovery()
       return
     }
-    this.spawnChild(resolution)
+    this.spawnChild(result.resolution)
   }
 
   private spawnChild(resolution: EntrypointResolution): void {

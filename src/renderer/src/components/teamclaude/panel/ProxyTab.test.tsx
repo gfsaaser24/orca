@@ -40,6 +40,7 @@ function makeState(lifecycle: TcProxyLifecycle, overrides: Partial<TcState> = {}
     bootId: 'boot',
     capabilities: [],
     owned: true,
+    currentAccount: null,
     accounts: [],
     routes: [],
     snapshotAt: 0,
@@ -79,6 +80,53 @@ const controls: TeamclaudeControls = {
 }
 
 describe('ProxyTab in-flight request framing (truthful consent copy)', () => {
+  it('localizes known reason categories and keeps resolver evidence secondary', () => {
+    act(() =>
+      root.render(
+        <ProxyTab
+          state={makeState('setup-needed', {
+            reasonKey: 'tc.reason.shimUnresolvable',
+            reasonDetail: 'found=C:\\npm\\teamclaude.cmd; attempted=scoped package'
+          })}
+          activity={[]}
+          controls={controls}
+          controlError={null}
+        />
+      )
+    )
+
+    expect(container.querySelector('[data-teamclaude-reason-summary]')?.textContent).toContain(
+      'launcher'
+    )
+    expect(container.querySelector('[data-teamclaude-reason-detail]')?.textContent).toContain(
+      'C:\\npm\\teamclaude.cmd'
+    )
+  })
+
+  it('localizes a typed proxy start failure and keeps its message secondary', () => {
+    act(() =>
+      root.render(
+        <ProxyTab
+          state={makeState('offline')}
+          activity={[]}
+          controls={controls}
+          controlError={{
+            action: 'startProxy',
+            reason: 'start-failed',
+            message: 'spawn EACCES'
+          }}
+        />
+      )
+    )
+
+    expect(container.querySelector('[data-teamclaude-reason-summary]')?.textContent).toContain(
+      'could not be started'
+    )
+    expect(container.querySelector('[data-teamclaude-reason-detail]')?.textContent).toBe(
+      'spawn EACCES'
+    )
+  })
+
   it('labels the count "In-flight requests", not sessions', () => {
     act(() =>
       root.render(
@@ -86,6 +134,7 @@ describe('ProxyTab in-flight request framing (truthful consent copy)', () => {
           state={makeState('owned')}
           activity={[row({ key: 'b:1', status: null }), row({ key: 'b:2', durationMs: null })]}
           controls={controls}
+          controlError={null}
         />
       )
     )
@@ -101,6 +150,7 @@ describe('ProxyTab in-flight request framing (truthful consent copy)', () => {
           state={makeState('owned')}
           activity={[row({ key: 'b:1', status: null }), row({ key: 'b:2', durationMs: null })]}
           controls={{ ...controls, stopProxy }}
+          controlError={null}
         />
       )
     )

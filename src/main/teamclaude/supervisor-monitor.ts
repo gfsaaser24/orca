@@ -8,6 +8,7 @@
 import type { TcProxyLifecycle } from '../../shared/teamclaude-types'
 import type { ProbeResult } from './supervisor-types'
 import { ADOPTED_DEATH_WINDOW_MS, ADOPTED_DEATH_BASE_MS } from './supervisor-types'
+import { RESOLVER_RECOVERY_PROBE_MS } from './supervisor-types'
 import type { TimerBag } from './supervisor-support'
 
 /** The Supervisor operations the monitor drives (all already exist on it). */
@@ -80,6 +81,32 @@ export class LivenessMonitor {
           return
         }
         this.start(h.hasChild(), false)
+      })()
+    })
+  }
+
+  /** Resolver failure must not spawn-loop, but an externally started listener
+   * can still recover the app without a restart. This lane only probes. */
+  startResolverRecovery(): void {
+    const h = this.host
+    const gen = h.generation()
+    h.timers.setMonitor(RESOLVER_RECOVERY_PROBE_MS, () => {
+      void (async (): Promise<void> => {
+        if (gen !== h.generation() || h.stopping()) {
+          return
+        }
+        try {
+          const probe = await h.probe()
+          if (probe.ok) {
+            await h.onProbeUp(probe)
+            return
+          }
+        } catch {
+          // A failed recovery probe stays in the low-frequency probe-only lane.
+        }
+        if (gen === h.generation() && !h.stopping()) {
+          this.startResolverRecovery()
+        }
       })()
     })
   }

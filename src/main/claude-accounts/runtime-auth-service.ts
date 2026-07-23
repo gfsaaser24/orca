@@ -36,11 +36,11 @@ import {
   setSelectedClaudeAccountIdForTarget,
   type ClaudeAccountSelectionTarget
 } from './runtime-selection'
+import { getTeamclaudeUsageSnapshot, waitForTeamclaudeInitialState } from '../teamclaude/init'
 
-/** Options for a runtime-auth sync/prepare. `skipManagedTokenRotation` is the
- *  surgical auth-preparation gate (spec §4): when a launch will be fleet-routed,
- *  skip ONLY the Orca-initiated OAuth rotation — keep envPatch, materialization,
- *  and strip. Threaded from the PTY/text-gen call sites. */
+/** Options for a runtime-auth sync/prepare. TeamClaude connectivity suppresses
+ *  native rotation internally; this explicit flag also forces suppression for
+ *  routed launch callers. Materialization, env patches, and stripping remain. */
 export type ClaudeRuntimeSyncOptions = {
   skipManagedTokenRotation?: boolean
 }
@@ -117,7 +117,11 @@ export class ClaudeRuntimeAuthService {
   private skipNextReadBackForAccountId: string | null = null
   private managedRefreshDeferredByLivePtyAccountId: string | null = null
 
-  constructor(private readonly store: Store) {
+  constructor(
+    private readonly store: Store,
+    private readonly isTeamclaudeConnected: () => boolean = () =>
+      getTeamclaudeUsageSnapshot().connected
+  ) {
     this.initializeLastSyncedState()
     void this.safeSyncForCurrentSelection()
   }
@@ -194,6 +198,9 @@ export class ClaudeRuntimeAuthService {
     target?: ClaudeAccountSelectionTarget,
     options?: ClaudeRuntimeSyncOptions
   ): Promise<void> {
+    // Why: startup auth sync must observe TeamClaude's first probe before any
+    // managed-token read-back or rotation can invalidate a routed session.
+    await waitForTeamclaudeInitialState()
     const settings = this.store.getSettings()
     const effectiveTarget = this.resolveWslDefaultTarget(target)
     const normalizedTarget = normalizeClaudeAccountSelectionTarget(effectiveTarget)
@@ -451,7 +458,7 @@ export class ClaudeRuntimeAuthService {
     // skip ONLY the Orca-initiated OAuth rotation. envPatch, credential
     // materialization, and stripAuthEnv below are untouched — the claude CLI
     // still self-refreshes through the proxy's raw /v1/oauth/token passthrough.
-    if (!liveClaudePtys && !options?.skipManagedTokenRotation) {
+    if (!liveClaudePtys && !this.shouldSkipManagedTokenRotation(normalizedTarget, options)) {
       const refreshed = await this.refreshManagedAccountTokenIfNeeded(
         activeAccount,
         credentialsJson
@@ -486,6 +493,23 @@ export class ClaudeRuntimeAuthService {
     }
     this.lastSyncedAccountId = activeAccount.id
     this.hasMaterializedRuntimeAuth = true
+  }
+
+  private shouldSkipManagedTokenRotation(
+    target: ReturnType<typeof normalizeClaudeAccountSelectionTarget>,
+    options?: ClaudeRuntimeSyncOptions
+  ): boolean {
+    if (options?.skipManagedTokenRotation) {
+      return true
+    }
+    if (target.runtime !== 'host') {
+      return false
+    }
+    try {
+      return this.isTeamclaudeConnected()
+    } catch {
+      return false
+    }
   }
 
   // Why: called by ClaudeAccountService before syncForCurrentSelection() after

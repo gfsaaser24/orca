@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/types'
+import type { TcState } from '../../../../shared/teamclaude-types'
 import { i18n } from '../../i18n/i18n'
 import { useAppStore } from '../../store'
 import { AccountsPane } from './AccountsPane'
@@ -35,6 +36,35 @@ describe('AccountsPane', () => {
     expect(markup).not.toContain('Account location')
     expect(markup).not.toContain('aria-label="Account location"')
     expect(markup).not.toContain('WSL is not available on this machine.')
+  })
+
+  it('replaces native Claude auth and switching surfaces while TeamClaude is connected', () => {
+    const teamclaudeState: TcState = {
+      lifecycle: 'adopted',
+      readiness: { usageReady: true, routingReady: true, controlReady: true },
+      reasonKey: null,
+      reasonDetail: null,
+      port: 3456,
+      serverVersion: '1.0.0',
+      bootId: 'boot',
+      capabilities: ['status.identity'],
+      owned: false,
+      currentAccount: 'fleet@example.com',
+      accounts: [],
+      routes: [],
+      snapshotAt: 1
+    }
+    const markup = renderPane(getDefaultSettings('/tmp'), { teamclaudeState })
+    const claudeSection = markup.slice(
+      markup.indexOf('id="accounts-claude"'),
+      markup.indexOf('id="accounts-codex"')
+    )
+
+    expect(claudeSection).toContain('Managed by TeamClaude')
+    expect(claudeSection).toContain('Open TeamClaude cockpit')
+    expect(claudeSection).not.toContain('Add Account')
+    expect(claudeSection).not.toContain('Re-authenticate')
+    expect(claudeSection).not.toContain('System default')
   })
 
   it('keeps the WSL account location controls on Windows-class hosts', () => {

@@ -15,7 +15,7 @@ import type {
   TcProxyLifecycle,
   TcState
 } from '../../../../../shared/teamclaude-types'
-import type { TeamclaudeControls } from '@/hooks/useTeamclaude'
+import type { TeamclaudeControlError, TeamclaudeControls } from '@/hooks/useTeamclaude'
 import { inFlightRequestCount, surfaceGates } from '../teamclaude-model'
 
 // Why: proxy lifecycle surface. Distinguishes owned vs adopted supervisors,
@@ -31,6 +31,63 @@ const LIFECYCLE_LABELS: Record<TcProxyLifecycle, { key: string; fallback: string
   owned: { key: 'teamclaude.lifecycle.owned', fallback: 'Owned' },
   'setup-needed': { key: 'teamclaude.lifecycle.setupNeeded', fallback: 'Setup needed' },
   offline: { key: 'teamclaude.lifecycle.offline', fallback: 'Offline' }
+}
+
+const REASON_LABELS: Record<string, { key: string; fallback: string }> = {
+  'tc.reason.noConfig': {
+    key: 'teamclaude.proxy.reason.noConfig',
+    fallback: 'TeamClaude setup is required.'
+  },
+  'tc.reason.teamclaudeNotFound': {
+    key: 'teamclaude.proxy.reason.notFound',
+    fallback: 'TeamClaude is not installed or is not available on PATH.'
+  },
+  'tc.reason.shimUnresolvable': {
+    key: 'teamclaude.proxy.reason.shimUnresolvable',
+    fallback: 'Orca found TeamClaude but could not resolve its launcher.'
+  },
+  'tc.reason.noAccounts': {
+    key: 'teamclaude.proxy.reason.noAccounts',
+    fallback: 'TeamClaude needs at least one account before it can start.'
+  },
+  'tc.reason.degraded': {
+    key: 'teamclaude.proxy.reason.degraded',
+    fallback: 'The connected TeamClaude server is missing required capabilities.'
+  },
+  'tc.reason.crashed': {
+    key: 'teamclaude.proxy.reason.crashed',
+    fallback: 'The TeamClaude proxy stopped unexpectedly.'
+  },
+  'tc.reason.offline': {
+    key: 'teamclaude.proxy.reason.offline',
+    fallback: 'The TeamClaude proxy is offline.'
+  },
+  'tc.reason.adoptedLost': {
+    key: 'teamclaude.proxy.reason.adoptedLost',
+    fallback: 'The external TeamClaude proxy stopped responding.'
+  },
+  launchedUnrouted: {
+    key: 'teamclaude.proxy.reason.launchedUnrouted',
+    fallback: 'A Claude session was launched without TeamClaude routing.'
+  }
+}
+
+const PROXY_START_REASON_LABELS: Record<
+  NonNullable<TeamclaudeControlError['reason']>,
+  { key: string; fallback: string }
+> = {
+  'no-config': {
+    key: 'teamclaude.proxy.reason.noConfig',
+    fallback: 'TeamClaude setup is required.'
+  },
+  'supervisor-unavailable': {
+    key: 'teamclaude.proxy.reason.supervisorUnavailable',
+    fallback: 'The TeamClaude supervisor is not ready yet.'
+  },
+  'start-failed': {
+    key: 'teamclaude.proxy.reason.startFailed',
+    fallback: 'The TeamClaude proxy could not be started.'
+  }
 }
 
 function StopConfirmDialog({
@@ -79,11 +136,13 @@ function StopConfirmDialog({
 export function ProxyTab({
   state,
   activity,
-  controls
+  controls,
+  controlError
 }: {
   state: TcState | null
   activity: TcActivityRow[]
   controls: TeamclaudeControls
+  controlError: TeamclaudeControlError | null
 }): React.JSX.Element {
   const { t } = useTranslation()
   const gates = surfaceGates(state)
@@ -92,6 +151,23 @@ export function ProxyTab({
   const inFlight = inFlightRequestCount(activity)
 
   const label = LIFECYCLE_LABELS[lifecycle]
+  const controlReasonLabel = controlError?.reason
+    ? PROXY_START_REASON_LABELS[controlError.reason]
+    : null
+  const stateReasonLabel = state?.reasonKey ? REASON_LABELS[state.reasonKey] : null
+  const reasonLabel = controlReasonLabel ?? stateReasonLabel
+  const reasonSummary = controlError
+    ? reasonLabel
+      ? t(reasonLabel.key, reasonLabel.fallback)
+      : t('teamclaude.proxy.actionFailed', 'The TeamClaude action could not be completed.')
+    : reasonLabel
+      ? t(reasonLabel.key, reasonLabel.fallback)
+      : gates.setupNeeded
+        ? t('teamclaude.proxy.setupGuidance', 'Finish TeamClaude setup to start routing.')
+        : state?.reasonKey
+          ? t('teamclaude.proxy.reason.generic', 'TeamClaude needs attention.')
+          : null
+  const reasonDetail = controlError?.message ?? state?.reasonDetail
 
   return (
     <div className="flex flex-col gap-4">
@@ -118,16 +194,22 @@ export function ProxyTab({
         </dl>
       </div>
 
-      {gates.setupNeeded || state?.reasonKey ? (
-        <p className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-          {state?.reasonDetail ??
-            t('teamclaude.proxy.setupGuidance', 'Finish TeamClaude setup to start routing.')}
-        </p>
+      {reasonSummary ? (
+        <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
+          <p data-teamclaude-reason-summary className="font-medium text-foreground">
+            {reasonSummary}
+          </p>
+          {reasonDetail ? (
+            <p data-teamclaude-reason-detail className="mt-1 break-words text-muted-foreground">
+              {reasonDetail}
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
       <div className="flex items-center gap-2">
         {lifecycle === 'offline' || gates.setupNeeded ? (
-          <Button size="sm" onClick={() => controls.startProxy()}>
+          <Button size="sm" onClick={() => void controls.startProxy()}>
             {gates.setupNeeded
               ? t('teamclaude.proxy.finishSetup', 'Finish setup')
               : t('teamclaude.proxy.start', 'Start proxy')}
@@ -155,7 +237,7 @@ export function ProxyTab({
         onCancel={() => setConfirmOpen(false)}
         onConfirm={() => {
           setConfirmOpen(false)
-          controls.stopProxy(inFlight)
+          void controls.stopProxy(inFlight)
         }}
       />
     </div>

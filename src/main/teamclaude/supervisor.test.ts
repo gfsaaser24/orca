@@ -7,6 +7,7 @@ import {
   type ProbeResult,
   type SpawnedChild,
   type EntrypointResolution,
+  type EntrypointResolutionResult,
   type OwnershipMarker
 } from './supervisor-types'
 
@@ -24,6 +25,14 @@ const resolution: EntrypointResolution = {
   node: 'node',
   entry: '/pkg/teamclaude/src/index.js',
   foundPath: '/usr/local/bin/teamclaude'
+}
+
+const resolvedEntrypoint: EntrypointResolutionResult = {
+  kind: 'resolved',
+  resolution,
+  foundPath: resolution.foundPath!,
+  attemptedCandidates: [resolution.entry],
+  nodeFallback: 'path-node'
 }
 
 type Harness = {
@@ -75,7 +84,7 @@ function makeHarness(
   const deps: SupervisorDeps = {
     probe: vi.fn(async () => downProbe()),
     spawnServer,
-    resolveEntrypoint: vi.fn(async () => resolution),
+    resolveEntrypoint: vi.fn(async () => resolvedEntrypoint),
     readMarker: () => markerStore.current,
     writeMarker: (m) => (markerStore.current = m),
     clearMarker: () => (markerStore.current = null),
@@ -116,11 +125,75 @@ describe('Supervisor state machine', () => {
     expect(h.supervisor.state).toBe('adopted-degraded')
   })
 
-  it('probe down + entrypoint unresolvable → setup-needed (no backoff loop)', async () => {
-    const h = makeHarness({ resolveEntrypoint: vi.fn(async () => null) })
+  it('resolver-caused setup-needed keeps probing and re-adopts without spawning', async () => {
+    const probe = vi
+      .fn<SupervisorDeps['probe']>()
+      .mockResolvedValueOnce(downProbe())
+      .mockResolvedValueOnce(downProbe())
+      .mockResolvedValueOnce(upProbe())
+    const h = makeHarness({
+      probe,
+      resolveEntrypoint: vi.fn<SupervisorDeps['resolveEntrypoint']>(async () => ({
+        kind: 'shim-unresolvable',
+        foundPath: 'C:\\npm\\teamclaude.cmd',
+        attemptedCandidates: ['C:\\npm\\node_modules\\@karpeleslab\\teamclaude\\package.json'],
+        nodeFallback: 'path-node'
+      }))
+    })
     await h.supervisor.start()
     expect(h.supervisor.state).toBe('setup-needed')
-    expect(h.scheduled).toHaveLength(0) // never scheduled a spawn retry
+    expect(h.scheduled).toHaveLength(1)
+
+    await h.fireNext()
+    expect(h.supervisor.state).toBe('setup-needed')
+    expect(h.deps.spawnServer).not.toHaveBeenCalled()
+    expect(h.scheduled).toHaveLength(1)
+
+    await h.fireNext()
+    expect(h.supervisor.state).toBe('adopted')
+    expect(h.deps.spawnServer).not.toHaveBeenCalled()
+  })
+
+  it('a successful client status re-adopts immediately from resolver setup-needed', async () => {
+    const h = makeHarness({
+      resolveEntrypoint: vi.fn<SupervisorDeps['resolveEntrypoint']>(async () => ({
+        kind: 'not-found',
+        foundPath: null,
+        attemptedCandidates: ['C:\\npm\\teamclaude.cmd'],
+        nodeFallback: 'electron-run-as-node'
+      }))
+    })
+    await h.supervisor.start()
+    expect(h.supervisor.state).toBe('setup-needed')
+
+    await h.supervisor.reAdoptHealthyListener(upProbe())
+
+    expect(h.supervisor.state).toBe('adopted')
+    expect(h.deps.spawnServer).not.toHaveBeenCalled()
+  })
+
+  it('client status re-adopts after an owned exit leaves stale ownership behind', async () => {
+    const resolveEntrypoint = vi
+      .fn<SupervisorDeps['resolveEntrypoint']>()
+      .mockResolvedValueOnce(resolvedEntrypoint)
+      .mockResolvedValueOnce({
+        kind: 'shim-unresolvable',
+        foundPath: 'C:\\npm\\teamclaude.cmd',
+        attemptedCandidates: ['C:\\npm\\node_modules\\@karpeleslab\\teamclaude'],
+        nodeFallback: 'path-node'
+      })
+    const h = makeHarness({ resolveEntrypoint })
+    await h.supervisor.start()
+    h.child?.exit(1)
+    await flush()
+    await h.fireNext()
+    await h.fireNext()
+    expect(h.supervisor.state).toBe('setup-needed')
+
+    await h.supervisor.reAdoptHealthyListener(upProbe())
+
+    expect(h.supervisor.state).toBe('adopted')
+    expect(h.deps.spawnServer).toHaveBeenCalledTimes(1)
   })
 
   it('probe down + resolvable → spawns owned and writes the marker', async () => {

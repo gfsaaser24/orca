@@ -150,7 +150,7 @@ import {
   normalizeProxyUrl,
   type NetworkProxySettings
 } from '../../shared/network-proxy'
-import { getTeamclaudeRoutingSnapshot } from '../teamclaude/init'
+import { getTeamclaudeRoutingSnapshot, noteTeamclaudeUnroutedLaunch } from '../teamclaude/init'
 import {
   applyRouting,
   isStaleTeamclaudeBaseUrl,
@@ -1139,6 +1139,14 @@ type TeamclaudeSeamContext = {
   networkProxySettings: NetworkProxySettings | null | undefined
 }
 
+function markTeamclaudeLaunchUnrouted(reason: string): void {
+  try {
+    noteTeamclaudeUnroutedLaunch(reason)
+  } catch {
+    // Telemetry state must never turn the guard-only fallback into a launch failure.
+  }
+}
+
 // Mutate `env` in place with the routing result (guard + proxy vars when routed;
 // stale-base-URL removal) and return the `envToDelete` entries the daemon must
 // propagate through its inherited-env re-merge. Non-claude launches and WSL/SSH
@@ -1148,6 +1156,7 @@ export function applyTeamclaudeSeamRouting(
   kind: RoutingKind,
   ctx: TeamclaudeSeamContext
 ): { routed: boolean; envToDelete: string[] } {
+  let teamclaudeLaunch = false
   try {
     if (ctx.isRemote || ctx.isWsl) {
       return { routed: false, envToDelete: [] }
@@ -1155,6 +1164,7 @@ export function applyTeamclaudeSeamRouting(
     if (!isTeamclaudeClaudeFamilyLaunch(ctx.launchAgent, ctx.command)) {
       return { routed: false, envToDelete: [] }
     }
+    teamclaudeLaunch = true
     const snapshot = teamclaudeSnapshotForLaunch(ctx.networkProxySettings)
     const result = applyRouting(env, kind, snapshot)
     for (const [key, value] of Object.entries(result.env)) {
@@ -1166,6 +1176,16 @@ export function applyTeamclaudeSeamRouting(
       delete env[key]
     }
     const routed = env.HTTPS_PROXY === `http://127.0.0.1:${snapshot.port}`
+    if (!routed) {
+      const reason = !snapshot.proxyUp
+        ? 'proxy-down'
+        : snapshot.orcaNetworkProxyConfigured
+          ? 'orca-network-proxy'
+          : snapshot.caPath === null
+            ? 'missing-ca'
+            : 'routing-carve-out'
+      markTeamclaudeLaunchUnrouted(reason)
+    }
     // The daemon re-merges its own inherited process.env, which spawn-request
     // envs deliberately exclude — so a stale TeamClaude base URL living only in
     // the host's process.env (e.g. a setx AutoRoute leftover) would survive
@@ -1182,6 +1202,9 @@ export function applyTeamclaudeSeamRouting(
     }
     return { routed, envToDelete }
   } catch {
+    if (teamclaudeLaunch) {
+      markTeamclaudeLaunchUnrouted('routing-error')
+    }
     return { routed: false, envToDelete: [] }
   }
 }

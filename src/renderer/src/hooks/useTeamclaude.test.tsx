@@ -18,6 +18,7 @@ function makeState(overrides: Partial<TcState> = {}): TcState {
     bootId: 'boot',
     capabilities: [],
     owned: true,
+    currentAccount: null,
     accounts: [],
     routes: [],
     snapshotAt: 0,
@@ -42,6 +43,7 @@ type Harness = {
   bridge: {
     onState: ReturnType<typeof vi.fn>
     onActivity: ReturnType<typeof vi.fn>
+    getState: ReturnType<typeof vi.fn>
     pin: ReturnType<typeof vi.fn>
     setRoutes: ReturnType<typeof vi.fn>
     setAccount: ReturnType<typeof vi.fn>
@@ -55,7 +57,10 @@ type Harness = {
   activityUnsub: ReturnType<typeof vi.fn>
 }
 
-function installBridge(logTailRows: TcActivityRow[] = []): Harness {
+function installBridge(
+  logTailRows: TcActivityRow[] = [],
+  statePromise: Promise<TcState> = Promise.resolve(makeState({ snapshotAt: 1 }))
+): Harness {
   let stateListener: ((s: TcState) => void) | null = null
   let activityListener: ((rows: TcActivityRow[]) => void) | null = null
   const stateUnsub = vi.fn()
@@ -69,11 +74,12 @@ function installBridge(logTailRows: TcActivityRow[] = []): Harness {
       activityListener = listener
       return activityUnsub
     }),
-    pin: vi.fn(),
-    setRoutes: vi.fn(),
-    setAccount: vi.fn(),
-    startProxy: vi.fn(),
-    stopProxy: vi.fn(),
+    getState: vi.fn(() => statePromise),
+    pin: vi.fn(async () => {}),
+    setRoutes: vi.fn(async () => {}),
+    setAccount: vi.fn(async () => {}),
+    startProxy: vi.fn(async () => ({ ok: true as const })),
+    stopProxy: vi.fn(async () => {}),
     logTail: vi.fn(() => Promise.resolve(logTailRows))
   }
   ;(window as unknown as { api: { teamclaude: TcBridge } }).api = { teamclaude: bridge }
@@ -133,6 +139,26 @@ describe('useTeamclaude', () => {
     unmount()
   })
 
+  it('subscribes before fetching current state and ignores a stale replay', async () => {
+    let resolveState!: (state: TcState) => void
+    const statePromise = new Promise<TcState>((resolve) => {
+      resolveState = resolve
+    })
+    const h = installBridge([], statePromise)
+    const { result, unmount } = renderHook()
+    expect(h.bridge.onState.mock.invocationCallOrder[0]).toBeLessThan(
+      h.bridge.getState.mock.invocationCallOrder[0]
+    )
+
+    act(() => h.emitState(makeState({ port: 9000, snapshotAt: 20 })))
+    await act(async () => {
+      resolveState(makeState({ port: 8000, snapshotAt: 10 }))
+      await statePromise
+    })
+    expect(result().state?.port).toBe(9000)
+    unmount()
+  })
+
   it('seeds activity from the log tail', async () => {
     installBridge([makeRow({ key: 'boot:seed' })])
     const { result, unmount } = renderHook()
@@ -144,15 +170,36 @@ describe('useTeamclaude', () => {
     unmount()
   })
 
-  it('routes controls through the bridge with contract-shaped payloads', () => {
+  it('routes controls through the bridge with contract-shaped payloads', async () => {
     const h = installBridge()
     const { result, unmount } = renderHook()
-    act(() => result().controls.pin('a1'))
-    act(() => result().controls.stopProxy(3))
-    act(() => result().controls.setAccount({ id: 'a1', disabled: true }))
+    await act(() => result().controls.pin('a1'))
+    await act(() => result().controls.stopProxy(3))
+    await act(() => result().controls.setAccount({ id: 'a1', disabled: true }))
     expect(h.bridge.pin).toHaveBeenCalledWith('a1')
     expect(h.bridge.stopProxy).toHaveBeenCalledWith({ confirmLiveSessions: 3 })
     expect(h.bridge.setAccount).toHaveBeenCalledWith({ id: 'a1', disabled: true })
+    unmount()
+  })
+
+  it('surfaces invoke rejections and typed proxy-start failures', async () => {
+    const h = installBridge()
+    h.bridge.pin.mockRejectedValueOnce(new Error('pin transport failed'))
+    h.bridge.startProxy.mockResolvedValueOnce({
+      ok: false,
+      reason: 'no-config',
+      message: 'Configure TeamClaude first.'
+    })
+    const { result, unmount } = renderHook()
+
+    await act(() => result().controls.pin('a1'))
+    expect(result().controlError).toMatchObject({ action: 'pin', message: 'pin transport failed' })
+    await act(() => result().controls.startProxy())
+    expect(result().controlError).toMatchObject({
+      action: 'startProxy',
+      reason: 'no-config',
+      message: 'Configure TeamClaude first.'
+    })
     unmount()
   })
 

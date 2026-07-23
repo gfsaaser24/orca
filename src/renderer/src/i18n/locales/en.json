@@ -3063,6 +3063,10 @@
             "runtime_reconnect_attempt": "Attempt {{value0}}"
           },
           "StatusBar": {
+            "openTeamclaudeRoutingDetails": "Open Claude details for TeamClaude routing",
+            "teamclaudeRoutingAccount": "TeamClaude routing account",
+            "teamclaudeRoutingFallback": "TeamClaude routing",
+            "openTeamclaudeCockpit": "Open TeamClaude cockpit",
             "9659e38343": "Ports",
             "d1e1a7a6bf": "Resource Manager",
             "24ac89df1a": "Remote Hosts",
@@ -4867,6 +4871,11 @@
           }
         },
         "AccountsPane": {
+          "teamclaudeManagedIntro": "TeamClaude is managing Claude routing and account selection.",
+          "teamclaudeManagedDescription": "TeamClaude owns Claude routing and account selection while connected.",
+          "teamclaudeManagedBadge": "Managed by TeamClaude",
+          "teamclaudeManagedCopy": "Add, sign in, re-authenticate, and switch Claude accounts from the TeamClaude cockpit.",
+          "openTeamclaudeCockpit": "Open TeamClaude cockpit",
           "c2d2751587": "Remove Account",
           "dbb9626ed1": "Cancel",
           "854ebbcc45": "Orca will delete the managed Claude auth for this saved account. If it is currently active, Orca falls back to the system default Claude login.",
@@ -13472,6 +13481,10 @@
       "offlineBanner": "Proxy offline — showing recent activity."
     },
     "proxy": {
+      "actionFailed": "The TeamClaude action could not be completed.",
+      "reason": {
+        "generic": "TeamClaude needs attention."
+      },
       "status": "Proxy status",
       "ownership": "Ownership",
       "owned": "Owned by this Orca",

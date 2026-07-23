@@ -42,6 +42,7 @@ function makeState(readiness: TcReadiness, overrides: Partial<TcState> = {}): Tc
     bootId: 'boot',
     capabilities: [],
     owned: true,
+    currentAccount: null,
     accounts: [account()],
     routes: [{ name: 'default', match: ['**/*'], accounts: ['a1'], bucket: null }],
     snapshotAt: 0,

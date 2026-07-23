@@ -16,16 +16,18 @@ import {
   TC_IPC,
   type TcAccountSetPayload,
   type TcActivityRow,
+  type TcProxyStartResult,
   type TcRoute,
   type TcState
 } from '../../shared/teamclaude-types'
 import type { ControlResult } from './control'
 
 export type TeamclaudeIpcHandlers = {
+  getState(): Promise<TcState> | TcState
   pin(accountId: string | null): Promise<ControlResult>
   setRoutes(routes: TcRoute[]): Promise<ControlResult>
   setAccount(payload: TcAccountSetPayload): Promise<ControlResult>
-  proxyStart(): Promise<void>
+  proxyStart(): Promise<TcProxyStartResult>
   proxyStop(args: { confirmLiveSessions: number }): Promise<void>
   logTail(): Promise<TcActivityRow[]>
 }
@@ -43,6 +45,7 @@ export class TeamclaudeIpc {
   private disposed = false
 
   constructor(handlers: TeamclaudeIpcHandlers) {
+    this.register(TC_IPC.stateGet, () => handlers.getState())
     this.register(TC_IPC.pin, (_e, accountId: string | null) => handlers.pin(accountId ?? null))
     this.register(TC_IPC.routesSet, (_e, routes: TcRoute[]) => handlers.setRoutes(routes))
     this.register(TC_IPC.accountSet, (_e, payload: TcAccountSetPayload) =>

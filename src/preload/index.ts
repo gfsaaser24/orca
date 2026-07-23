@@ -4547,6 +4547,7 @@ const api = {
       ipcRenderer.on(TC_IPC.activity, listener)
       return () => ipcRenderer.removeListener(TC_IPC.activity, listener)
     },
+    getState: () => ipcRenderer.invoke(TC_IPC.stateGet),
     pin: (accountId: string | null) => ipcRenderer.invoke(TC_IPC.pin, accountId),
     setRoutes: (routes: TcRoute[]) => ipcRenderer.invoke(TC_IPC.routesSet, routes),
     setAccount: (payload: TcAccountSetPayload) => ipcRenderer.invoke(TC_IPC.accountSet, payload),

@@ -60,6 +60,7 @@ function state(
     bootId: 'boot',
     capabilities: [],
     owned: true,
+    currentAccount: null,
     accounts: [account()],
     routes: [],
     snapshotAt: NOW,

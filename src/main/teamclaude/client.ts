@@ -24,6 +24,7 @@ import {
   type RawLog,
   type RawRoutesResponse,
   type RawStatus,
+  type TcNativeAccountIdentity,
   type TcStatusSnapshot
 } from './client-mapping'
 
@@ -46,6 +47,7 @@ type ClientOptions = {
   pollMs?: number
   /** SSE reconnect backoff. Default 2s. */
   reconnectMs?: number
+  nativeAccounts?: () => readonly TcNativeAccountIdentity[]
 }
 
 const REQUEST_TIMEOUT_MS = 10_000
@@ -55,6 +57,7 @@ export class TeamclaudeClient extends EventEmitter {
   private readonly apiKey: string
   private readonly pollMs: number
   private readonly reconnectMs: number
+  private readonly nativeAccounts: () => readonly TcNativeAccountIdentity[]
   private pollTimer: NodeJS.Timeout | null = null
   private sseDisconnect: (() => void) | null = null
   private stopped = false
@@ -71,6 +74,7 @@ export class TeamclaudeClient extends EventEmitter {
     this.apiKey = opts.apiKey
     this.pollMs = opts.pollMs ?? 5000
     this.reconnectMs = opts.reconnectMs ?? 2000
+    this.nativeAccounts = opts.nativeAccounts ?? (() => [])
   }
 
   override on<E extends keyof TcClientEvents>(event: E, listener: TcClientEvents[E]): this {
@@ -145,7 +149,7 @@ export class TeamclaudeClient extends EventEmitter {
     }
     try {
       const raw = await this.json<RawStatus>('/teamclaude/status')
-      const snapshot = parseStatus(raw)
+      const snapshot = parseStatus(raw, this.nativeAccounts())
       await this.overrideRoutesIfReady(snapshot)
       this.emit('status', snapshot)
     } catch (error) {
@@ -155,7 +159,7 @@ export class TeamclaudeClient extends EventEmitter {
 
   /** One-shot status read (used by the supervisor probe / adopt handshake). */
   async fetchStatus(): Promise<TcStatusSnapshot> {
-    return parseStatus(await this.json<RawStatus>('/teamclaude/status'))
+    return parseStatus(await this.json<RawStatus>('/teamclaude/status'), this.nativeAccounts())
   }
 
   /** /status.routes is the read-only display view (auto rows + {name,eligible}

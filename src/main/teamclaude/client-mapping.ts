@@ -21,6 +21,9 @@ import type {
   TcReadiness,
   TcRoute
 } from '../../shared/teamclaude-types'
+import { findOrcaAccountId, type TcNativeAccountIdentity } from './client-account-identity'
+
+export type { TcNativeAccountIdentity } from './client-account-identity'
 
 /** Parsed, contract-shaped result of a /status read. */
 export type TcStatusSnapshot = {
@@ -28,6 +31,7 @@ export type TcStatusSnapshot = {
   bootId: string | null
   capabilities: string[]
   readiness: TcReadiness
+  currentAccount: string | null
   accounts: TcAccount[]
   routes: TcRoute[]
 }
@@ -60,6 +64,7 @@ type RawAccount = {
    *  time). Keys mirror the bucket keys (unified5h, unified7d, …). */
   observedAt?: Record<string, string | null | undefined> | null
 }
+
 /** A route row as it appears on the DISPLAY view (/status.routes): account
  *  entries are {name,eligible} objects and ephemeral rows carry autocreated. */
 type RawDisplayRoute = {
@@ -81,6 +86,7 @@ export type RawStatus = {
   version?: string
   bootId?: string
   capabilities?: string[]
+  currentAccount?: string | null
   /** Top-level pinned-account NAME (or null) — mapped onto each account's
    *  `pinned` flag (the server has no per-account pinned field). */
   manualAccount?: string | null
@@ -195,7 +201,10 @@ export function deriveReadiness(capabilities: string[]): TcReadiness {
   }
 }
 
-export function parseStatus(raw: RawStatus): TcStatusSnapshot {
+export function parseStatus(
+  raw: RawStatus,
+  nativeAccounts: readonly TcNativeAccountIdentity[] = []
+): TcStatusSnapshot {
   const capabilities = Array.isArray(raw.capabilities) ? raw.capabilities.filter(isString) : []
   const manualAccount = typeof raw.manualAccount === 'string' ? raw.manualAccount : null
   return {
@@ -203,8 +212,9 @@ export function parseStatus(raw: RawStatus): TcStatusSnapshot {
     bootId: typeof raw.bootId === 'string' ? raw.bootId : null,
     capabilities,
     readiness: deriveReadiness(capabilities),
+    currentAccount: typeof raw.currentAccount === 'string' ? raw.currentAccount : null,
     accounts: Array.isArray(raw.accounts)
-      ? raw.accounts.map((a) => toAccount(a, manualAccount))
+      ? raw.accounts.map((a) => toAccount(a, manualAccount, nativeAccounts))
       : [],
     // Display fallback only (read-only). Authoritative routes come from GET
     // /teamclaude/routes when routingReady (the client overrides this).
@@ -241,7 +251,11 @@ function parseIsoMs(v: string | null | undefined): number | null {
   return Number.isFinite(t) ? t : null
 }
 
-function toAccount(raw: RawAccount, manualAccount: string | null): TcAccount {
+function toAccount(
+  raw: RawAccount,
+  manualAccount: string | null,
+  nativeAccounts: readonly TcNativeAccountIdentity[]
+): TcAccount {
   const id = raw.id ?? raw.name ?? ''
   const q = raw.quota ?? {}
   const obs = raw.observedAt ?? {}
@@ -254,8 +268,7 @@ function toAccount(raw: RawAccount, manualAccount: string | null): TcAccount {
     // The server exposes a single top-level `manualAccount` (pinned account
     // NAME); there is no per-account pinned field. Map it onto each account.
     pinned: manualAccount != null && raw.name === manualAccount,
-    // Joined upstream by stable id / email; the server does not send it.
-    orcaAccountId: null,
+    orcaAccountId: findOrcaAccountId(raw, nativeAccounts),
     buckets: {
       unified5h: buildBucket(q.unified5h, q.unified5hReset, obs.unified5h),
       unified7d: buildBucket(q.unified7d, q.unified7dReset, obs.unified7d),

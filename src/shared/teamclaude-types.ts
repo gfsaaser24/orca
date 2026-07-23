@@ -84,6 +84,8 @@ export type TcState = {
   capabilities: string[]
   /** True when this Orca TC instance spawned (owns) the server. */
   owned: boolean
+  /** TeamClaude's current routing account name from `/status`. */
+  currentAccount: string | null
   accounts: TcAccount[]
   routes: TcRoute[]
   /** Epoch ms of the snapshot this state was built from. */
@@ -96,13 +98,15 @@ export const TC_IPC = {
   state: 'tc:state',
   /** push: TcActivityRow[] (batched) */
   activity: 'tc:activity',
+  /** invoke: () => TcState — current-state replay after subscribing */
+  stateGet: 'tc:state:get',
   /** invoke: (accountId: string | null) => void — null unpins */
   pin: 'tc:pin',
   /** invoke: (routes: TcRoute[]) => void */
   routesSet: 'tc:routes:set',
   /** invoke: ({id, disabled?, priority?}) => void */
   accountSet: 'tc:account:set',
-  /** invoke: () => void */
+  /** invoke: () => TcProxyStartResult */
   proxyStart: 'tc:proxy:start',
   /** invoke: ({confirmLiveSessions: number}) => void — count echoed back as consent */
   proxyStop: 'tc:proxy:stop',
@@ -112,14 +116,23 @@ export const TC_IPC = {
 
 export type TcAccountSetPayload = { id: string; disabled?: boolean; priority?: number }
 
+export type TcProxyStartResult =
+  | { ok: true }
+  | {
+      ok: false
+      reason: 'no-config' | 'supervisor-unavailable' | 'start-failed'
+      message: string
+    }
+
 /** Shape of the preload bridge exposed at window.api.teamclaude. */
 export type TcBridge = {
   onState(cb: (state: TcState) => void): () => void
   onActivity(cb: (rows: TcActivityRow[]) => void): () => void
+  getState(): Promise<TcState>
   pin(accountId: string | null): Promise<void>
   setRoutes(routes: TcRoute[]): Promise<void>
   setAccount(payload: TcAccountSetPayload): Promise<void>
-  startProxy(): Promise<void>
+  startProxy(): Promise<TcProxyStartResult>
   stopProxy(payload: { confirmLiveSessions: number }): Promise<void>
   logTail(): Promise<TcActivityRow[]>
 }
