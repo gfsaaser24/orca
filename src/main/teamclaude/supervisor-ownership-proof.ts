@@ -1,4 +1,5 @@
-import { RECLAIM_TOLERANCE_MS, type OwnershipMarker, type SupervisorDeps } from './supervisor-types'
+import { markerProvesServiceOwnership } from '../services/service-supervisor-runtime'
+import type { OwnershipMarker, SupervisorDeps } from './supervisor-types'
 
 type OwnershipProbe = Pick<SupervisorDeps, 'processAlive' | 'processStartTime'>
 
@@ -7,9 +8,15 @@ export async function markerProvesOwnership(
   port: number,
   probe: OwnershipProbe
 ): Promise<boolean> {
-  if (!marker || marker.port !== port || !probe.processAlive(marker.pid)) {
-    return false
-  }
-  const started = await probe.processStartTime(marker.pid)
-  return started !== null && Math.abs(started - marker.startedAt) <= RECLAIM_TOLERANCE_MS
+  return markerProvesServiceOwnership(
+    marker
+      ? {
+          pid: marker.pid,
+          startedAt: marker.startedAt,
+          identity: `teamclaude:${marker.port}`
+        }
+      : null,
+    `teamclaude:${port}`,
+    probe
+  )
 }

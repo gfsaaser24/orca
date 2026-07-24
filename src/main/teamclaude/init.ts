@@ -1,7 +1,7 @@
 /** App-lifetime TeamClaude singleton; window recreation only rebinds IPC push targets.
  * Config changes rebuild client/supervisor and kill an owned process before a port move. */
 import { TeamclaudeConfigWatcher, type TcConnectionConfig } from './config'
-import { Supervisor } from './supervisor'
+import { TeamClaudeSupervisor as Supervisor } from '../services/profiles/teamclaude'
 import type { SupervisorTransition } from './supervisor-types'
 import { TeamclaudeClient, deriveReadiness, type TcStatusSnapshot } from './client'
 import type { TcNativeAccountIdentity } from './client-mapping'

@@ -118,4 +118,5 @@ export type SupervisorConfig = {
   port: number
   apiKey: string
   binPath: string | null
+  markerPath?: string
 }

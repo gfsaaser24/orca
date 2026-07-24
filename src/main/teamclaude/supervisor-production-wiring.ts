@@ -25,7 +25,8 @@ export function createSupervisorProductionWiring(
     config: {
       port: connection.port,
       apiKey: connection.apiKey,
-      binPath: connection.binPath
+      binPath: connection.binPath,
+      markerPath: marker
     },
     deps: {
       probe: async () => {
