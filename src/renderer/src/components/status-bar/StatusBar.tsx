@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { TeamclaudeCockpit } from '@/components/teamclaude/TeamclaudeCockpit'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -1287,12 +1288,12 @@ export function ProviderSegment({
   return (
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
-      {p.session && !compact && (
-        <MiniBar usedPct={clampUsedPercent(p.session.usedPercent)} display={display} />
-      )}
       {visibleWindows.map((window, index) => (
         <React.Fragment key={window.key}>
           {index > 0 && <span className="text-muted-foreground">·</span>}
+          {!compact && (
+            <MiniBar usedPct={clampUsedPercent(window.window.usedPercent)} display={display} />
+          )}
           <WindowLabel w={window.window} label={window.label} display={display} />
         </React.Fragment>
       ))}
@@ -2160,6 +2161,9 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             {showClaude && (
               <ClaudeSwitcherMenu claude={visibleClaude} compact={compact} iconOnly={iconOnly} />
             )}
+            {/* TeamClaude gear: opens the per-account quota/pin flyout; hides
+                itself when the proxy bridge is unavailable. */}
+            <TeamclaudeCockpit />
             {showCodex && (
               <CodexSwitcherMenu codex={visibleCodex} compact={compact} iconOnly={iconOnly} />
             )}

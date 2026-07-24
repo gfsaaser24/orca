@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react'
+import { Settings2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { Button } from '../ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { useCliproxy } from '@/hooks/useCliproxy'
 import { useTeamclaude } from '@/hooks/useTeamclaude'
@@ -9,7 +12,6 @@ import { useAppStore, type AppState } from '@/store'
 import { OPEN_TEAMCLAUDE_COCKPIT_EVENT } from './teamclaude-cockpit-event'
 import { TeamclaudeFlyout } from './TeamclaudeFlyout'
 import { TeamclaudePanel } from './TeamclaudePanel'
-import { TeamclaudeWidget } from './TeamclaudeWidget'
 
 function isLocalLaunchContext(state: AppState): boolean {
   const activeRepo = state.activeRepoId
@@ -31,6 +33,7 @@ function isLocalLaunchContext(state: AppState): boolean {
 // Why: the single cockpit mount owns both service hooks so renderer bridge access
 // remains centralized even though lifecycle and backend data live in separate tabs.
 export function TeamclaudeCockpit(): React.JSX.Element | null {
+  const { t } = useTranslation()
   const { state, activity, controls, controlError, bridgeAvailable } = useTeamclaude()
   const { state: cpaState, controls: cpaControls, controlError: cpaControlError } = useCliproxy()
   const localLaunchAvailable = useAppStore(isLocalLaunchContext)
@@ -56,9 +59,18 @@ export function TeamclaudeCockpit(): React.JSX.Element | null {
     <>
       <Popover open={flyoutOpen} onOpenChange={setFlyoutOpen}>
         <PopoverTrigger asChild>
-          <TeamclaudeWidget state={state} />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="text-muted-foreground hover:text-foreground"
+            aria-label={t('teamclaude.cockpit.openFlyout', 'TeamClaude accounts and routing')}
+            title={t('teamclaude.cockpit.openFlyout', 'TeamClaude accounts and routing')}
+          >
+            <Settings2 />
+          </Button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-auto p-3">
+        <PopoverContent side="top" align="end" className="w-auto p-3">
           <TeamclaudeFlyout
             state={state}
             controls={controls}

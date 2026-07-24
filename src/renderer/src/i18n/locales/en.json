@@ -13396,6 +13396,9 @@
     }
   },
   "teamclaude": {
+    "cockpit": {
+      "openFlyout": "TeamClaude accounts and routing"
+    },
     "bucket": {
       "unified5h": "5h",
       "unified7d": "7d",
