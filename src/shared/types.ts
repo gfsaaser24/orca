@@ -2692,6 +2692,10 @@ export type GlobalSettings = {
    *  usable without the setup output crowding the initial pane. */
   setupScriptLaunchMode: SetupScriptLaunchMode
   terminalScrollbackRows: number
+  /** Dedicated loopback port owned by Orca's CLIProxyAPI supervisor. */
+  cliproxyPort?: number
+  /** User-selected official CLIProxyAPI release binary. */
+  cliproxyBinaryPath?: string | null
   /** Optional app-level proxy for Electron networking and locally spawned PTYs.
    *  Empty preserves system proxy settings plus inherited proxy env behavior. */
   httpProxyUrl?: string

@@ -16,6 +16,7 @@ import type {
   TcRoute,
   TcState
 } from '../shared/teamclaude-types'
+import type { CpaBridge } from '../shared/cliproxy-types'
 
 /** Typed result of a TeamClaude control-plane mutation (never throws). */
 export type TeamclaudeControlResult = { ok: boolean; error?: string; status?: number }
@@ -31,6 +32,8 @@ export type TeamclaudeApi = {
   stopProxy: (args: { confirmLiveSessions: number }) => Promise<void>
   logTail: () => Promise<TcActivityRow[]>
 }
+
+export type CliproxyApi = CpaBridge
 import type {
   TerminalTabCloseRequest,
   TerminalTabCloseResponse
@@ -3337,6 +3340,7 @@ export type PreloadApi = {
     onError: (callback: (data: SpeechErrorEvent) => void) => () => void
   }
   teamclaude: TeamclaudeApi
+  cliproxy: CliproxyApi
 }
 
 declare global {

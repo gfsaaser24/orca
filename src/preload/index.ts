@@ -235,6 +235,12 @@ import {
   type TcRoute,
   type TcState
 } from '../shared/teamclaude-types'
+import {
+  CPA_IPC,
+  type CpaBridge,
+  type CpaProviderKind,
+  type CpaState
+} from '../shared/cliproxy-types'
 
 type NativeFileDropCallback = (data: NativeFileDropPayload) => void
 
@@ -4557,7 +4563,30 @@ const api = {
     stopProxy: (args: { confirmLiveSessions: number }) =>
       ipcRenderer.invoke(TC_IPC.proxyStop, args),
     logTail: () => ipcRenderer.invoke(TC_IPC.logTail)
-  } satisfies PreloadApi['teamclaude'] satisfies TcBridge
+  } satisfies PreloadApi['teamclaude'] satisfies TcBridge,
+
+  cliproxy: {
+    onState: (callback: (state: CpaState) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, state: CpaState): void => callback(state)
+      ipcRenderer.on(CPA_IPC.state, listener)
+      return () => ipcRenderer.removeListener(CPA_IPC.state, listener)
+    },
+    getState: () => ipcRenderer.invoke(CPA_IPC.stateGet),
+    loginStart: (provider: CpaProviderKind) => ipcRenderer.invoke(CPA_IPC.loginStart, provider),
+    loginPoll: (state: string) => ipcRenderer.invoke(CPA_IPC.loginPoll, state),
+    loginCancel: (state: string) => ipcRenderer.invoke(CPA_IPC.loginCancel, state),
+    accountSetDisabled: (payload: { name: string; disabled: boolean }) =>
+      ipcRenderer.invoke(CPA_IPC.accountSetDisabled, payload),
+    accountSetFields: (payload: { name: string; priority?: number; note?: string }) =>
+      ipcRenderer.invoke(CPA_IPC.accountSetFields, payload),
+    accountDelete: (payload: { name: string }) =>
+      ipcRenderer.invoke(CPA_IPC.accountDelete, payload),
+    aliasSet: (payload: { channel: string; aliases: Record<string, string> }) =>
+      ipcRenderer.invoke(CPA_IPC.aliasSet, payload),
+    serviceStart: () => ipcRenderer.invoke(CPA_IPC.serviceStart),
+    serviceStop: () => ipcRenderer.invoke(CPA_IPC.serviceStop),
+    logsTail: (cursor: string | null) => ipcRenderer.invoke(CPA_IPC.logsTail, cursor)
+  } satisfies PreloadApi['cliproxy'] satisfies CpaBridge
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

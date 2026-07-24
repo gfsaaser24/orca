@@ -26,6 +26,7 @@ import { OpenCodeUsageStore, initOpenCodeUsagePath } from './opencode-usage/stor
 import { killAllPty } from './ipc/pty'
 import { initDaemonPtyProvider, disconnectDaemon, shutdownDaemon } from './daemon/daemon-init'
 import { initTeamclaude } from './teamclaude/init'
+import { initCliproxy } from './cliproxy/init'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
@@ -1889,6 +1890,8 @@ app.whenReady().then(async () => {
     // immediately; waiting for the next polling interval prolongs wrong data.
     onConnectionChange: (connected) => rateLimits?.handleTeamclaudeConnectionChange(connected)
   })
+  // Why: CPA owns app-lifetime polling and IPC; window recreation only replays its state.
+  initCliproxy(store)
   codexRuntimeHome = new CodexRuntimeHomeService(store)
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome)
   claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)

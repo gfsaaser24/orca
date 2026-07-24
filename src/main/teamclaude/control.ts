@@ -20,6 +20,14 @@ export type ControlResult = {
   status?: number
 }
 
+export type TeamclaudeBackendAccountUpsert = {
+  name: 'cliproxy'
+  type: 'apikey'
+  apiKey: string
+  upstream: string
+  priority: 100
+}
+
 type ControlOptions = {
   port: number
   apiKey: string
@@ -51,6 +59,11 @@ export class TeamclaudeControl {
 
   /** Set account flags by stable ID (spec §3.2). */
   setAccount(payload: TcAccountSetPayload): Promise<ControlResult> {
+    return this.post('/teamclaude/account', payload)
+  }
+
+  /** Idempotently create/update the dedicated CPA backend account (CPA D2). */
+  upsertBackendAccount(payload: TeamclaudeBackendAccountUpsert): Promise<ControlResult> {
     return this.post('/teamclaude/account', payload)
   }
 
