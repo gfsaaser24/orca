@@ -154,18 +154,23 @@ function ProviderCard({
   const pendingHere = activeFlow && family.providers.includes(activeFlow.provider)
   return (
     <section className="rounded-md border border-border p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+      {/* Wrap-aware header: two-provider families (Gemini / Antigravity) carry
+          two Add buttons that cannot fit beside the title in a half-width card,
+          so the button cluster flows to its own line instead of overlapping. */}
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <div className="flex min-w-0 items-center gap-2">
           <span
             className={
               accounts.length > 0
-                ? 'size-1.5 rounded-full bg-emerald-500'
-                : 'size-1.5 rounded-full bg-neutral-500/40'
+                ? 'size-1.5 shrink-0 rounded-full bg-emerald-500'
+                : 'size-1.5 shrink-0 rounded-full bg-neutral-500/40'
             }
           />
-          <h4 className="text-sm font-medium">{t(family.labelKey, family.labelFallback)}</h4>
+          <h4 className="truncate text-sm font-medium">
+            {t(family.labelKey, family.labelFallback)}
+          </h4>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center justify-end gap-1">
           {family.providers.map((provider) => {
             const label = ADD_LABELS[provider]
             return (
@@ -174,6 +179,7 @@ function ProviderCard({
                 type="button"
                 variant="outline"
                 size="xs"
+                className="shrink-0"
                 disabled={!enabled || busyProvider !== null || activeFlow !== null}
                 onClick={() => onStart(provider)}
               >

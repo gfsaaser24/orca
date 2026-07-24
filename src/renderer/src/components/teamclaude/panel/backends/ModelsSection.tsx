@@ -188,7 +188,7 @@ export function ModelsSection({
         <Input
           type="search"
           value={query}
-          className="h-8 w-40 shrink-0 sm:w-56"
+          className="h-8 w-40 min-w-24 shrink sm:w-56"
           placeholder={t('cliproxy.models.search', 'Search models')}
           onChange={(event) => setQuery(event.target.value)}
         />
