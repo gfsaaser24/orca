@@ -1,4 +1,5 @@
 import type { safeStorage } from 'electron'
+import type { CpaClaudeDelegation } from './config-manifest'
 
 export type CpaConfigKeys = {
   apiKey: string
@@ -33,6 +34,10 @@ export type CpaConfigOwnerOptions = {
   isServiceStopped: () => boolean
   storage?: CpaSafeStorage
   warn?: (message: string) => void
+  /** Resolves the teamclaude fleet-delegation entry for CPA's Claude provider,
+   * or null when teamclaude has no usable connection config. Resolved fresh at
+   * every config write/inspection so a changed proxy key surfaces as drift. */
+  claudeDelegation?: () => Promise<CpaClaudeDelegation | null>
 }
 
 export class CpaKeyStorageUnavailableError extends Error {

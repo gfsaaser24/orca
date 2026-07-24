@@ -139,9 +139,17 @@ export function createModelsSync(
     throw new Error('CLIProxyAPI model registry did not converge after its reload')
   }
 
+  // Claude-family models must never enter the teamclaude backend route: the
+  // fleet already owns claude-* routing, and the delegated CPA Claude provider
+  // forwards THROUGH teamclaude — routing claude ids back to the backend
+  // account would loop requests (teamclaude -> CPA -> teamclaude).
+  const isClaudeFamilyId = (id: string): boolean => /claude/i.test(id)
+
   const syncGeneration = async (generation: number): Promise<void> => {
     const models = await readConvergedModels(generation)
-    const currentIds = new Set(models.map((model) => model.id))
+    const currentIds = new Set(
+      models.map((model) => model.id).filter((id) => !isClaudeFamilyId(id))
+    )
     const routes = normalizeRoutes(await tcControl.getRoutes())
     assertCurrent(generation)
     const existingExclusive = routes.find((route) => route.name === EXCLUSIVE_ROUTE_NAME)
@@ -162,7 +170,11 @@ export function createModelsSync(
       }
     }
 
-    const routedIds = sortedUnique([...currentIds, ...tombstones.keys()])
+    // Filter again after tombstone merge: a claude id inherited from a
+    // pre-guard route must age out, never be re-routed.
+    const routedIds = sortedUnique([...currentIds, ...tombstones.keys()]).filter(
+      (id) => !isClaudeFamilyId(id)
+    )
     const unrelatedRoutes = routes.filter((route) => route.name !== EXCLUSIVE_ROUTE_NAME)
     const nextRoutes: TeamclaudeBackendRoute[] =
       routedIds.length === 0

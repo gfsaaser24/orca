@@ -87,6 +87,29 @@ describe('createModelsSync', () => {
     )
   })
 
+  it('never routes claude-family models to the backend account', async () => {
+    vi.useFakeTimers()
+    const client: SyncClient = {
+      getModelsAuthed: vi.fn(async () => ({
+        data: [model('gpt-5.4'), model('claude-fable-5'), model('claude-sonnet-5')]
+      }))
+    }
+    // A claude id inherited from a pre-guard exclusive route must age out too,
+    // never be re-routed: the delegated Claude provider forwards through
+    // teamclaude, so backend-routing a claude id would loop requests.
+    const control = createControl([
+      { name: 'cliproxy-backends', match: ['claude-opus-4-8'], accounts: ['cliproxy'] }
+    ])
+    const sync = createModelsSync(client as never, control)
+
+    await settle(sync.forceSync())
+
+    expect(control.setRoutes).toHaveBeenCalledWith([
+      { name: 'cliproxy-backends', match: ['gpt-5.4'], accounts: ['cliproxy'] }
+    ])
+    expect(control.setAccount).toHaveBeenCalledWith({ id: 'cliproxy', models: ['gpt-5.4'] })
+  })
+
   it('keeps removed models exclusively routed during the ten-minute tombstone grace', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-07-24T12:00:00.000Z'))

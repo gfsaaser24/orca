@@ -34,7 +34,10 @@ function encryptedStorage(available = true): CpaSafeStorage {
   }
 }
 
-async function harness(stopped = true): Promise<{
+async function harness(
+  stopped = true,
+  claudeDelegation?: () => Promise<{ apiKey: string; baseUrl: string } | null>
+): Promise<{
   owner: CpaConfigOwner
   directory: string
   updates: { cliproxyPort?: number }[]
@@ -57,7 +60,8 @@ async function harness(stopped = true): Promise<{
         updateSettings: (update) => updates.push(update)
       },
       isServiceStopped: () => serviceStopped,
-      storage: encryptedStorage()
+      storage: encryptedStorage(),
+      claudeDelegation
     })
   }
 }
@@ -105,6 +109,33 @@ describe('CpaConfigOwner', () => {
     config.host = '0.0.0.0'
     await writeFile(generated.configPath, stringify(config))
     expect(await owner.inspect()).toMatchObject({ drifted: true, driftKeys: ['host'] })
+  })
+
+  it('writes and drift-tracks the teamclaude claude delegation entry', async () => {
+    let delegation: { apiKey: string; baseUrl: string } | null = {
+      apiKey: 'tc-proxy-key',
+      baseUrl: 'http://127.0.0.1:3456'
+    }
+    const { owner } = await harness(true, async () => delegation)
+    const generated = await owner.ensure()
+    const config = parse(await readFile(generated.configPath, 'utf8'))
+    expect(config['claude-api-key']).toEqual([
+      { 'api-key': 'tc-proxy-key', 'base-url': 'http://127.0.0.1:3456' }
+    ])
+
+    expect(await owner.inspect()).toMatchObject({ drifted: false })
+
+    delegation = { apiKey: 'tc-proxy-key-2', baseUrl: 'http://127.0.0.1:3456' }
+    expect(await owner.inspect()).toMatchObject({
+      drifted: true,
+      driftKeys: ['claude-api-key']
+    })
+
+    delegation = null
+    expect(await owner.inspect()).toMatchObject({
+      drifted: true,
+      driftKeys: ['claude-api-key']
+    })
   })
 
   it('ignores empty and truncated transient reads', async () => {

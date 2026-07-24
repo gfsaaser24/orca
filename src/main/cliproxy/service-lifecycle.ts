@@ -7,6 +7,7 @@ import {
   type ServiceSupervisor,
   type ServiceTransition
 } from '../services/service-supervisor'
+import { readConnectionConfig } from '../teamclaude/config'
 import { CpaConfigOwner } from './config-owner'
 import { CpaIpc } from './ipc'
 import { ManagementClient } from './management-client'
@@ -58,7 +59,17 @@ export class CpaService {
     this.configOwner = new CpaConfigOwner({
       userDataPath: getCanonicalUserDataPath(),
       settings: store,
-      isServiceStopped: () => this.serviceStopped
+      isServiceStopped: () => this.serviceStopped,
+      // Fleet delegation: CPA's Claude provider forwards through the local
+      // teamclaude proxy instead of holding its own copies of the fleet's
+      // OAuth tokens (refresh-token rotation would race the two holders).
+      claudeDelegation: async () => {
+        const config = await readConnectionConfig()
+        if (!config?.apiKey || !config.port) {
+          return null
+        }
+        return { apiKey: config.apiKey, baseUrl: `http://127.0.0.1:${config.port}` }
+      }
     })
     const actions = createCpaServiceActions({
       client: () => this.client,

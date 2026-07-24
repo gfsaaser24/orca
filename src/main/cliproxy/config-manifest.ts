@@ -9,6 +9,12 @@ export type StoredSecrets = {
   acceptedManagementConfigValue: string
 }
 
+/** Generated claude-api-key entry that forwards CPA's Claude provider through
+ * the local teamclaude proxy. The fleet stays the single OAuth token holder —
+ * copying refresh tokens into CPA would race teamclaude on rotation and log
+ * fleet accounts out. */
+export type CpaClaudeDelegation = { apiKey: string; baseUrl: string }
+
 export type SemanticManifest = {
   host: string
   port: number
@@ -21,12 +27,15 @@ export type SemanticManifest = {
   loggingToFile: boolean
   logsMaxTotalSizeMb: number
   requestLog: boolean
+  /** null = no entry; 'foreign' = a claude-api-key list we did not generate. */
+  claudeDelegation: CpaClaudeDelegation | 'foreign' | null
 }
 
 export function expectedManifest(
   directory: string,
   port: number,
-  secrets: Pick<StoredSecrets, 'apiKey' | 'managementKey'>
+  secrets: Pick<StoredSecrets, 'apiKey' | 'managementKey'>,
+  claudeDelegation: CpaClaudeDelegation | null = null
 ): SemanticManifest {
   return {
     host: '127.0.0.1',
@@ -39,8 +48,28 @@ export function expectedManifest(
     usageStatisticsEnabled: true,
     loggingToFile: true,
     logsMaxTotalSizeMb: 50,
-    requestLog: false
+    requestLog: false,
+    claudeDelegation
   }
+}
+
+function parseClaudeDelegation(value: unknown): CpaClaudeDelegation | 'foreign' | null {
+  if (value == null) {
+    return null
+  }
+  if (!Array.isArray(value) || value.length === 0) {
+    return Array.isArray(value) ? null : 'foreign'
+  }
+  const entry = value[0]
+  if (
+    value.length === 1 &&
+    isRecord(entry) &&
+    typeof entry['api-key'] === 'string' &&
+    typeof entry['base-url'] === 'string'
+  ) {
+    return { apiKey: entry['api-key'], baseUrl: entry['base-url'] }
+  }
+  return 'foreign'
 }
 
 export function semanticManifest(value: unknown): SemanticManifest | null {
@@ -75,7 +104,8 @@ export function semanticManifest(value: unknown): SemanticManifest | null {
     usageStatisticsEnabled: value['usage-statistics-enabled'] as boolean,
     loggingToFile: value['logging-to-file'] as boolean,
     logsMaxTotalSizeMb: value['logs-max-total-size-mb'] as number,
-    requestLog: value['request-log'] as boolean
+    requestLog: value['request-log'] as boolean,
+    claudeDelegation: parseClaudeDelegation(value['claude-api-key'])
   }
 }
 
@@ -95,7 +125,8 @@ export function manifestDifferences(
     ['usageStatisticsEnabled', 'usage-statistics-enabled'],
     ['loggingToFile', 'logging-to-file'],
     ['logsMaxTotalSizeMb', 'logs-max-total-size-mb'],
-    ['requestLog', 'request-log']
+    ['requestLog', 'request-log'],
+    ['claudeDelegation', 'claude-api-key']
   ]
   for (const [key, label] of pairs) {
     if (!semanticEqual(expected[key], actual[key])) {

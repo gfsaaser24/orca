@@ -9,6 +9,7 @@ import {
   isStoredSecrets,
   manifestDifferences,
   semanticManifest,
+  type CpaClaudeDelegation,
   type StoredSecrets
 } from './config-manifest'
 import {
@@ -47,6 +48,7 @@ export class CpaConfigOwner {
   private readonly isServiceStopped: () => boolean
   private readonly storage: CpaSafeStorage
   private readonly warn: (message: string) => void
+  private readonly claudeDelegation: () => Promise<CpaClaudeDelegation | null>
 
   constructor(options: CpaConfigOwnerOptions) {
     this.directory = path.join(options.userDataPath, CONFIG_DIRECTORY)
@@ -56,6 +58,7 @@ export class CpaConfigOwner {
     this.isServiceStopped = options.isServiceStopped
     this.storage = options.storage ?? safeStorage
     this.warn = options.warn ?? ((message) => console.warn(`[cliproxy] ${message}`))
+    this.claudeDelegation = options.claudeDelegation ?? (async () => null)
   }
 
   async ensure(): Promise<CpaConfigOwnership> {
@@ -207,8 +210,9 @@ export class CpaConfigOwner {
 
   private async writeConfig(secrets: StoredSecrets, port: number): Promise<void> {
     await mkdir(this.directory, { recursive: true })
-    const manifest = expectedManifest(this.directory, port, secrets)
-    const document = {
+    const delegation = await this.resolveDelegation()
+    const manifest = expectedManifest(this.directory, port, secrets, delegation)
+    const document: Record<string, unknown> = {
       host: manifest.host,
       port: manifest.port,
       'auth-dir': manifest.authDir,
@@ -223,7 +227,25 @@ export class CpaConfigOwner {
       'logs-max-total-size-mb': manifest.logsMaxTotalSizeMb,
       'request-log': manifest.requestLog
     }
+    if (delegation) {
+      document['claude-api-key'] = [
+        { 'api-key': delegation.apiKey, 'base-url': delegation.baseUrl }
+      ]
+    }
     await atomicWrite(this.configPath, stringify(document), 0o600)
+  }
+
+  /** teamclaude fleet delegation for CPA's Claude provider. A resolver failure
+   * degrades to "no delegation" rather than blocking config generation. */
+  private async resolveDelegation(): Promise<CpaClaudeDelegation | null> {
+    try {
+      return await this.claudeDelegation()
+    } catch (error) {
+      this.warn(
+        `teamclaude delegation unavailable: ${error instanceof Error ? error.message : String(error)}`
+      )
+      return null
+    }
   }
 
   private async inspectWith(
@@ -261,7 +283,7 @@ export class CpaConfigOwner {
       return { drifted: false, driftKeys: [], transientRead: true }
     }
 
-    const expected = expectedManifest(this.directory, port, secrets)
+    const expected = expectedManifest(this.directory, port, secrets, await this.resolveDelegation())
     const driftKeys = manifestDifferences(expected, actual, secrets.acceptedManagementConfigValue)
     const managementValue = actual.managementSecretKey
     const acceptsCpaHash =
