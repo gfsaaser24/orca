@@ -25,6 +25,8 @@ export type TeamclaudePanelProps = {
   cpaControls: CliproxyControls
   cpaControlError: CliproxyControlError | null
   localLaunchAvailable: boolean
+  cpaBinaryPath?: string
+  onSaveCpaBinaryPath?: (path: string) => Promise<void>
 }
 
 export function TeamclaudePanel({
@@ -37,7 +39,9 @@ export function TeamclaudePanel({
   cpaState,
   cpaControls,
   cpaControlError,
-  localLaunchAvailable
+  localLaunchAvailable,
+  cpaBinaryPath,
+  onSaveCpaBinaryPath
 }: TeamclaudePanelProps): React.JSX.Element {
   const { t } = useTranslation()
   const gates = surfaceGates(state)
@@ -80,6 +84,8 @@ export function TeamclaudePanel({
               state={cpaState}
               controls={cpaControls}
               localLaunchAvailable={localLaunchAvailable}
+              binaryPath={cpaBinaryPath}
+              onSaveBinaryPath={onSaveCpaBinaryPath}
             />
           </TabsContent>
         </Tabs>

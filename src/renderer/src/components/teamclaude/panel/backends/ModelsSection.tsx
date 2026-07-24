@@ -44,11 +44,11 @@ function AliasEditor({
     )
   }
   return (
-    <div className="flex min-w-0 items-center gap-1">
+    <div className="flex w-full min-w-0 items-center gap-1">
       <Input
         value={alias}
         disabled={!enabled}
-        className="h-7 min-w-24"
+        className="h-7 w-full min-w-0"
         placeholder={t('cliproxy.models.aliasPlaceholder', 'Alias')}
         aria-label={t('cliproxy.models.aliasAria', 'Global alias for {{value0}}', {
           value0: model.id
@@ -59,6 +59,7 @@ function AliasEditor({
         type="button"
         variant="ghost"
         size="icon-xs"
+        className="shrink-0"
         disabled={!enabled}
         aria-label={t('cliproxy.models.saveAlias', 'Save alias for {{value0}}', {
           value0: model.id
@@ -94,7 +95,7 @@ function ModelRow({
     toast.success(t('cliproxy.models.commandCopied', 'Launch command copied'))
   }
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_minmax(8rem,0.7fr)_auto] items-center gap-2 border-t border-border py-2 first:border-t-0">
+    <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(6.5rem,0.8fr)_minmax(0,auto)] items-center gap-2 border-t border-border py-2 first:border-t-0">
       <div className="min-w-0">
         <p className="truncate font-mono text-xs">{model.id}</p>
         <p className="truncate text-[10px] text-muted-foreground">
@@ -109,19 +110,25 @@ function ModelRow({
         controls={controls}
         onResult={onResult}
       />
-      <div className="flex items-center justify-end gap-1">
-        <Badge variant={routingLinked && model.routable ? 'secondary' : 'outline'}>
-          {routingLinked
-            ? model.routable
-              ? t('cliproxy.models.routable', 'Routable')
-              : t('cliproxy.models.notRoutable', 'Not routable')
-            : t('cliproxy.models.routingUnavailable', 'Routing unavailable')}
+      <div className="flex min-w-0 items-center justify-end gap-1">
+        <Badge
+          variant={routingLinked && model.routable ? 'secondary' : 'outline'}
+          className="min-w-0 max-w-36"
+        >
+          <span className="truncate">
+            {routingLinked
+              ? model.routable
+                ? t('cliproxy.models.routable', 'Routable')
+                : t('cliproxy.models.notRoutable', 'Not routable')
+              : t('cliproxy.models.routingUnavailable', 'Routing unavailable')}
+          </span>
         </Badge>
         {localLaunchAvailable ? (
           <Button
             type="button"
             variant="ghost"
             size="icon-xs"
+            className="shrink-0"
             aria-label={t('cliproxy.models.copyCommand', 'Copy launch command for {{value0}}', {
               value0: model.id
             })}
@@ -168,9 +175,9 @@ export function ModelsSection({
   return (
     <section className="space-y-2">
       <div className="flex items-end justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold">{t('cliproxy.models.title', 'Models')}</h3>
-          <p className="text-xs text-muted-foreground">
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-semibold">{t('cliproxy.models.title', 'Models')}</h3>
+          <p className="truncate text-xs text-muted-foreground">
             <Check className="mr-1 inline size-3" />
             {t('cliproxy.models.globalAliases', 'Global aliases')}
             {localLaunchAvailable
@@ -181,7 +188,7 @@ export function ModelsSection({
         <Input
           type="search"
           value={query}
-          className="h-8 w-56"
+          className="h-8 w-40 shrink-0 sm:w-56"
           placeholder={t('cliproxy.models.search', 'Search models')}
           onChange={(event) => setQuery(event.target.value)}
         />

@@ -13526,7 +13526,7 @@
       "portBusy": "Choose another CLIProxyAPI port in Settings, or stop the process using this port.",
       "callbackPortBusy": "Close the process using the provider callback port, then retry.",
       "loginInProgress": "Finish or cancel the existing login for this provider, then retry.",
-      "binaryNotFound": "Set the CLIProxyAPI binary path in Settings before starting the service.",
+      "binaryNotFound": "Set the CLIProxyAPI binary path in the Backends tab before starting the service.",
       "bridgeUnavailable": "CLIProxyAPI controls are unavailable in this build.",
       "failed": "The CLIProxyAPI action could not be completed."
     },
@@ -13608,10 +13608,15 @@
       "offline": "CLIProxyAPI is offline.",
       "lastKnown": "Showing last-known data from {{value0}} ago.",
       "setupNeeded": "CLIProxyAPI setup is required.",
-      "binaryPath": "Set the CLIProxyAPI binary path in Settings, then start the service.",
+      "binaryPath": "Enter the CLIProxyAPI binary path below, then start the service.",
       "models": "Model inventory is not ready.",
       "management": "Provider management is unavailable.",
       "routing": "Update teamclaude or reconnect routing before launching backend models."
+    },
+    "setup": {
+      "binaryPlaceholder": "C:\\path\\to\\cli-proxy-api.exe",
+      "binaryAria": "CLIProxyAPI binary path",
+      "saveAndStart": "Save & start"
     },
     "lifecycle": {
       "probing": "Probing",

@@ -88,7 +88,8 @@ afterEach(() => {
 function render(
   cpaState: CpaState | null,
   cpaControls = controls(),
-  localLaunchAvailable = true
+  localLaunchAvailable = true,
+  onSaveBinaryPath?: (path: string) => Promise<void>
 ): void {
   act(() =>
     root.render(
@@ -97,6 +98,7 @@ function render(
         controls={cpaControls}
         localLaunchAvailable={localLaunchAvailable}
         now={301_000}
+        onSaveBinaryPath={onSaveBinaryPath}
       />
     )
   )
@@ -148,6 +150,51 @@ describe('BackendsTab degradation matrix', () => {
     )
     expect(container.textContent).toContain('binary path')
     expect(container.textContent).not.toContain('is offline')
+  })
+
+  it('saves the binary path from the setup card and starts the service', async () => {
+    const cpaControls = controls()
+    const onSaveBinaryPath = vi.fn(async () => {})
+    render(
+      state({
+        lifecycle: 'setup-needed',
+        readiness: {
+          alive: false,
+          modelsReady: false,
+          managementReady: false,
+          routingLinked: false
+        },
+        accounts: [],
+        models: []
+      }),
+      cpaControls,
+      true,
+      onSaveBinaryPath
+    )
+    const input = container.querySelector<HTMLInputElement>(
+      'input[aria-label="CLIProxyAPI binary path"]'
+    )
+    if (!input) {
+      throw new Error('binary path input not found')
+    }
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+        input,
+        'C:\\bin\\cli-proxy-api.exe'
+      )
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    const button = [...container.querySelectorAll('button')].find((entry) =>
+      entry.textContent?.includes('Save & start')
+    )
+    if (!button) {
+      throw new Error('save button not found')
+    }
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(onSaveBinaryPath).toHaveBeenCalledWith('C:\\bin\\cli-proxy-api.exe')
+    expect(cpaControls.serviceStart).toHaveBeenCalled()
   })
 
   it('keeps the full provider UI active when ready with zero backends', () => {

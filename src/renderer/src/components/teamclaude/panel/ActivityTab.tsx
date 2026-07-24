@@ -13,6 +13,11 @@ import { isActivityRowPending } from '../teamclaude-model'
 const ROW_HEIGHT = 30
 const OVERSCAN = 12
 
+// Why: every track uses minmax(0,…) so the grid can compress below its natural
+// width inside a narrow dialog — cells truncate instead of running off the card.
+const GRID_TEMPLATE =
+  'grid-cols-[minmax(0,4.5rem)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,3rem)_minmax(0,3.75rem)_minmax(0,1.5fr)]'
+
 function formatTime(at: number): string {
   const date = new Date(at)
   return date.toLocaleTimeString(undefined, { hour12: false })
@@ -26,11 +31,12 @@ function ActivityRowView({ row }: { row: TcActivityRow }): React.JSX.Element {
     <div
       role="row"
       className={cn(
-        'grid h-[30px] grid-cols-[80px_120px_140px_60px_70px_1fr] items-center gap-2 border-b border-border/60 px-2 text-xs',
+        'grid h-[30px] items-center gap-2 border-b border-border/60 px-2 text-xs',
+        GRID_TEMPLATE,
         pending && 'italic text-muted-foreground'
       )}
     >
-      <span role="cell" className="tabular-nums text-muted-foreground">
+      <span role="cell" className="truncate tabular-nums text-muted-foreground">
         {formatTime(row.at)}
       </span>
       <span role="cell" className="truncate">
@@ -42,7 +48,7 @@ function ActivityRowView({ row }: { row: TcActivityRow }): React.JSX.Element {
       <span
         role="cell"
         className={cn(
-          'tabular-nums',
+          'truncate tabular-nums',
           pending
             ? 'text-sky-500'
             : statusOk
@@ -52,7 +58,7 @@ function ActivityRowView({ row }: { row: TcActivityRow }): React.JSX.Element {
       >
         {pending ? t('teamclaude.activity.pending', 'live') : row.status}
       </span>
-      <span role="cell" className="tabular-nums text-muted-foreground">
+      <span role="cell" className="truncate tabular-nums text-muted-foreground">
         {row.durationMs == null
           ? '—'
           : t('teamclaude.activity.durationMs', '{{value0}}ms', { value0: row.durationMs })}
@@ -111,18 +117,33 @@ export function ActivityTab({
   const virtualRows = virtualizer.getVirtualItems()
 
   return (
-    <div className="flex h-[360px] flex-col">
+    <div className="flex h-[min(360px,55vh)] flex-col overflow-hidden">
       {offline ? <OfflineBanner /> : null}
       <div
         role="row"
-        className="grid grid-cols-[80px_120px_140px_60px_70px_1fr] gap-2 border-b border-border bg-muted/60 px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+        className={cn(
+          'grid gap-2 border-b border-border bg-muted/60 px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground',
+          GRID_TEMPLATE
+        )}
       >
-        <span role="columnheader">{t('teamclaude.activity.time', 'Time')}</span>
-        <span role="columnheader">{t('teamclaude.activity.model', 'Model')}</span>
-        <span role="columnheader">{t('teamclaude.activity.account', 'Account')}</span>
-        <span role="columnheader">{t('teamclaude.activity.status', 'Status')}</span>
-        <span role="columnheader">{t('teamclaude.activity.duration', 'Duration')}</span>
-        <span role="columnheader">{t('teamclaude.activity.path', 'Path')}</span>
+        <span role="columnheader" className="truncate">
+          {t('teamclaude.activity.time', 'Time')}
+        </span>
+        <span role="columnheader" className="truncate">
+          {t('teamclaude.activity.model', 'Model')}
+        </span>
+        <span role="columnheader" className="truncate">
+          {t('teamclaude.activity.account', 'Account')}
+        </span>
+        <span role="columnheader" className="truncate">
+          {t('teamclaude.activity.status', 'Status')}
+        </span>
+        <span role="columnheader" className="truncate">
+          {t('teamclaude.activity.duration', 'Duration')}
+        </span>
+        <span role="columnheader" className="truncate">
+          {t('teamclaude.activity.path', 'Path')}
+        </span>
       </div>
       <div ref={scrollRef} role="table" className="min-h-0 flex-1 overflow-auto scrollbar-sleek">
         <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>

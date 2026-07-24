@@ -34,6 +34,8 @@ export function TeamclaudeCockpit(): React.JSX.Element | null {
   const { state, activity, controls, controlError, bridgeAvailable } = useTeamclaude()
   const { state: cpaState, controls: cpaControls, controlError: cpaControlError } = useCliproxy()
   const localLaunchAvailable = useAppStore(isLocalLaunchContext)
+  const cpaBinaryPath = useAppStore((s) => s.settings?.cliproxyBinaryPath ?? '')
+  const updateSettings = useAppStore((s) => s.updateSettings)
   const [flyoutOpen, setFlyoutOpen] = useState(false)
   const [panelOpen, setPanelOpen] = useState(false)
 
@@ -78,6 +80,10 @@ export function TeamclaudeCockpit(): React.JSX.Element | null {
         cpaControls={cpaControls}
         cpaControlError={cpaControlError}
         localLaunchAvailable={localLaunchAvailable}
+        cpaBinaryPath={cpaBinaryPath}
+        onSaveCpaBinaryPath={async (path) => {
+          await updateSettings({ cliproxyBinaryPath: path.trim() || null })
+        }}
       />
     </>
   )
