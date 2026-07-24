@@ -16,7 +16,13 @@ import {
   StateDot,
   ThrottleBadge
 } from './teamclaude-atoms'
-import { BUCKET_KEYS, BUCKET_LABELS, formatAge, surfaceGates } from './teamclaude-model'
+import {
+  BUCKET_KEYS,
+  BUCKET_LABELS,
+  fleetAccounts,
+  formatAge,
+  surfaceGates
+} from './teamclaude-model'
 
 // Why: the expanded per-account view. Every bucket (including the Fable bucket)
 // gets its own bar, reset countdown, and overage/stale badges; per-account
@@ -119,7 +125,7 @@ export function TeamclaudeFlyout({
 }: TeamclaudeFlyoutProps): React.JSX.Element {
   const { t } = useTranslation()
   const gates = surfaceGates(state)
-  const accounts = state?.accounts ?? []
+  const accounts = fleetAccounts(state?.accounts ?? [])
   const anyPinned = accounts.some((account) => account.pinned)
   // Why (offline degradation matrix, spec §5): keep the last-known fleet on
   // screen greyed rather than blanking to a bare message, with an age stamp so

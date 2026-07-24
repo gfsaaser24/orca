@@ -38,6 +38,9 @@ export type TcQuotaBucket = {
 export type TcAccount = {
   /** Stable ID: teamclaude account UUID + organization (Phase-0 field). */
   id: string
+  /** 'backend' = a gateway account (e.g. the cliproxy CPA bridge) — filtered
+   *  from Accounts/Flyout surfaces, kept in Routes. Absent/'anthropic' = fleet. */
+  kind?: 'anthropic' | 'backend'
   name: string
   email: string | null
   status: 'active' | 'throttled' | 'exhausted' | 'error' | 'disabled'

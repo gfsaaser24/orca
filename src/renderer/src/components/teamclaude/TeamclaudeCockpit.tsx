@@ -1,19 +1,39 @@
 import React, { useEffect, useState } from 'react'
 
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
+import { useCliproxy } from '@/hooks/useCliproxy'
 import { useTeamclaude } from '@/hooks/useTeamclaude'
-import { TeamclaudeWidget } from './TeamclaudeWidget'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { useAppStore, type AppState } from '@/store'
+import { OPEN_TEAMCLAUDE_COCKPIT_EVENT } from './teamclaude-cockpit-event'
 import { TeamclaudeFlyout } from './TeamclaudeFlyout'
 import { TeamclaudePanel } from './TeamclaudePanel'
-import { OPEN_TEAMCLAUDE_COCKPIT_EVENT } from './teamclaude-cockpit-event'
+import { TeamclaudeWidget } from './TeamclaudeWidget'
 
-// Why: the single mount entry for the TeamClaude cockpit. Owns the hook, wires
-// the compact widget to the flyout popover, and hosts the management panel.
-// Renders nothing when the preload bridge is absent (e.g. web build) so the
-// mount point stays inert until the main-process module is present.
+function isLocalLaunchContext(state: AppState): boolean {
+  const activeRepo = state.activeRepoId
+    ? state.repos.find((repo) => repo.id === state.activeRepoId)
+    : null
+  if (activeRepo && getRepoExecutionHostId(activeRepo) !== LOCAL_EXECUTION_HOST_ID) {
+    return false
+  }
+  const projectRuntime = getLocalProjectExecutionRuntimeContext(state)
+  if (projectRuntime?.status === 'resolved') {
+    return projectRuntime.runtime.kind !== 'wsl'
+  }
+  if (projectRuntime?.status === 'repair-required') {
+    return projectRuntime.repair.preferredRuntime.kind !== 'wsl'
+  }
+  return true
+}
 
+// Why: the single cockpit mount owns both service hooks so renderer bridge access
+// remains centralized even though lifecycle and backend data live in separate tabs.
 export function TeamclaudeCockpit(): React.JSX.Element | null {
   const { state, activity, controls, controlError, bridgeAvailable } = useTeamclaude()
+  const { state: cpaState, controls: cpaControls, controlError: cpaControlError } = useCliproxy()
+  const localLaunchAvailable = useAppStore(isLocalLaunchContext)
   const [flyoutOpen, setFlyoutOpen] = useState(false)
   const [panelOpen, setPanelOpen] = useState(false)
 
@@ -54,6 +74,10 @@ export function TeamclaudeCockpit(): React.JSX.Element | null {
         activity={activity}
         controls={controls}
         controlError={controlError}
+        cpaState={cpaState}
+        cpaControls={cpaControls}
+        cpaControlError={cpaControlError}
+        localLaunchAvailable={localLaunchAvailable}
       />
     </>
   )

@@ -13510,7 +13510,131 @@
       "accounts": "Accounts",
       "routes": "Routes",
       "activity": "Activity",
-      "proxy": "Proxy"
+      "proxy": "Proxy",
+      "services": "Services",
+      "backends": "Backends"
+    },
+    "services": {
+      "teamclaude": "TeamClaude",
+      "cliproxy": "CLIProxyAPI",
+      "restartRequired": "Restart required to apply changes.",
+      "cancel": "Cancel"
+    }
+  },
+  "cliproxy": {
+    "action": {
+      "portBusy": "Choose another CLIProxyAPI port in Settings, or stop the process using this port.",
+      "callbackPortBusy": "Close the process using the provider callback port, then retry.",
+      "loginInProgress": "Finish or cancel the existing login for this provider, then retry.",
+      "binaryNotFound": "Set the CLIProxyAPI binary path in Settings before starting the service.",
+      "bridgeUnavailable": "CLIProxyAPI controls are unavailable in this build.",
+      "failed": "The CLIProxyAPI action could not be completed."
+    },
+    "logs": {
+      "title": "Service logs",
+      "refresh": "Load newer log lines",
+      "mainOnly": "CLIProxyAPI main log only",
+      "empty": "No log lines returned.",
+      "loading": "Loading logs…",
+      "unavailable": "Logs are unavailable while management is offline."
+    },
+    "models": {
+      "aliasPlaceholder": "Alias",
+      "aliasAria": "Global alias for {{value0}}",
+      "saveAlias": "Save alias for {{value0}}",
+      "commandCopied": "Launch command copied",
+      "routable": "Routable",
+      "notRoutable": "Not routable",
+      "routingUnavailable": "Routing unavailable",
+      "copyCommand": "Copy launch command for {{value0}}",
+      "title": "Models",
+      "globalAliases": "Global aliases",
+      "localHint": "Launch commands are for local sessions.",
+      "search": "Search models",
+      "unavailable": "Model inventory is unavailable right now.",
+      "noMatches": "No models match this search.",
+      "empty": "No models discovered yet. Add a provider account to begin."
+    },
+    "accounts": {
+      "ready": "Ready",
+      "cooling": "Cooling",
+      "unavailable": "Unavailable",
+      "recentAccounting": "{{value0}} success · {{value1}} failed",
+      "priority": "Priority",
+      "enabledAria": "Enable {{value0}}",
+      "enabled": "Enabled"
+    },
+    "providers": {
+      "geminiFamily": "Gemini / Antigravity",
+      "codex": "Codex / ChatGPT",
+      "claude": "Claude",
+      "xai": "Grok",
+      "kimi": "Kimi",
+      "addGemini": "Add Gemini CLI",
+      "addAntigravity": "Add Antigravity",
+      "addAccount": "Add account",
+      "empty": "No accounts connected.",
+      "externalTitle": "API-key providers",
+      "apiKey": "API key",
+      "openaiCompatible": "OpenAI compatible",
+      "managedOutside": "Managed outside Orca (v2)",
+      "title": "Provider accounts",
+      "description": "OAuth and device accounts used by CLIProxyAPI."
+    },
+    "login": {
+      "success": "{{value0}} new models routable",
+      "browserPending": "Waiting for sign-in in your browser…",
+      "cancel": "Cancel",
+      "deviceTitle": "Finish device sign-in",
+      "deviceDescription": "Open the provider page and enter this one-time code.",
+      "userCode": "User code",
+      "codePending": "Waiting for code…",
+      "devicePending": "Waiting for provider confirmation…",
+      "checkStatus": "Check status"
+    },
+    "stats": {
+      "title": "Stats",
+      "accountingHint": "Accounting — not remaining quota",
+      "empty": "No accounting data in this window.",
+      "backend": "Backend",
+      "requests": "Requests",
+      "successRate": "Success rate",
+      "tokensIn": "Tokens in",
+      "tokensOut": "Tokens out",
+      "p50": "p50",
+      "latencyMs": "{{value0}}ms"
+    },
+    "degradation": {
+      "offline": "CLIProxyAPI is offline.",
+      "lastKnown": "Showing last-known data from {{value0}} ago.",
+      "setupNeeded": "CLIProxyAPI setup is required.",
+      "binaryPath": "Set the CLIProxyAPI binary path in Settings, then start the service.",
+      "models": "Model inventory is not ready.",
+      "management": "Provider management is unavailable.",
+      "routing": "Update teamclaude or reconnect routing before launching backend models."
+    },
+    "lifecycle": {
+      "probing": "Probing",
+      "adopted": "Adopted",
+      "owned": "Owned",
+      "setupNeeded": "Setup needed",
+      "offline": "Offline",
+      "restartRequired": "Restart required"
+    },
+    "service": {
+      "actionFailed": "The CLIProxyAPI service action could not be completed.",
+      "setupGuidance": "Set the CLIProxyAPI binary path in Settings before starting the service.",
+      "attention": "CLIProxyAPI needs attention.",
+      "owned": "Owned by this Orca",
+      "notOwned": "Not owned",
+      "port": "Port",
+      "version": "Version",
+      "finishSetup": "Finish setup",
+      "start": "Start service",
+      "stop": "Stop service",
+      "stopTitle": "Stop CLIProxyAPI?",
+      "stopBody": "Backend model requests will fail until the service is started again.",
+      "stopConfirm": "Stop service"
     }
   }
 }

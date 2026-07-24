@@ -3,17 +3,16 @@ import { useTranslation } from 'react-i18next'
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'
+import type { CpaState } from '../../../../shared/cliproxy-types'
 import type { TcActivityRow, TcState } from '../../../../shared/teamclaude-types'
+import type { CliproxyControlError, CliproxyControls } from '@/hooks/useCliproxy'
 import type { TeamclaudeControlError, TeamclaudeControls } from '@/hooks/useTeamclaude'
 import { AccountsTab } from './panel/AccountsTab'
-import { RoutesTab } from './panel/RoutesTab'
 import { ActivityTab } from './panel/ActivityTab'
-import { ProxyTab } from './panel/ProxyTab'
+import { BackendsTab } from './panel/BackendsTab'
+import { RoutesTab } from './panel/RoutesTab'
+import { ServicesTab } from './panel/ServicesTab'
 import { surfaceGates } from './teamclaude-model'
-
-// Why: the full management surface. A tabbed dialog keeping the four cockpit
-// concerns (accounts, routes, activity, proxy) in one place; each tab is its
-// own module so per-file line budgets stay comfortable.
 
 export type TeamclaudePanelProps = {
   open: boolean
@@ -22,6 +21,10 @@ export type TeamclaudePanelProps = {
   activity: TcActivityRow[]
   controls: TeamclaudeControls
   controlError: TeamclaudeControlError | null
+  cpaState: CpaState | null
+  cpaControls: CliproxyControls
+  cpaControlError: CliproxyControlError | null
+  localLaunchAvailable: boolean
 }
 
 export function TeamclaudePanel({
@@ -30,13 +33,17 @@ export function TeamclaudePanel({
   state,
   activity,
   controls,
-  controlError
+  controlError,
+  cpaState,
+  cpaControls,
+  cpaControlError,
+  localLaunchAvailable
 }: TeamclaudePanelProps): React.JSX.Element {
   const { t } = useTranslation()
   const gates = surfaceGates(state)
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>{t('teamclaude.panel.title', 'TeamClaude')}</DialogTitle>
         </DialogHeader>
@@ -45,7 +52,8 @@ export function TeamclaudePanel({
             <TabsTrigger value="accounts">{t('teamclaude.panel.accounts', 'Accounts')}</TabsTrigger>
             <TabsTrigger value="routes">{t('teamclaude.panel.routes', 'Routes')}</TabsTrigger>
             <TabsTrigger value="activity">{t('teamclaude.panel.activity', 'Activity')}</TabsTrigger>
-            <TabsTrigger value="proxy">{t('teamclaude.panel.proxy', 'Proxy')}</TabsTrigger>
+            <TabsTrigger value="services">{t('teamclaude.panel.services', 'Services')}</TabsTrigger>
+            <TabsTrigger value="backends">{t('teamclaude.panel.backends', 'Backends')}</TabsTrigger>
           </TabsList>
           <TabsContent value="accounts">
             <AccountsTab state={state} controls={controls} />
@@ -56,12 +64,22 @@ export function TeamclaudePanel({
           <TabsContent value="activity">
             <ActivityTab activity={activity} offline={gates.offline} />
           </TabsContent>
-          <TabsContent value="proxy">
-            <ProxyTab
+          <TabsContent value="services">
+            <ServicesTab
               state={state}
               activity={activity}
               controls={controls}
               controlError={controlError}
+              cpaState={cpaState}
+              cpaControls={cpaControls}
+              cpaControlError={cpaControlError}
+            />
+          </TabsContent>
+          <TabsContent value="backends">
+            <BackendsTab
+              state={cpaState}
+              controls={cpaControls}
+              localLaunchAvailable={localLaunchAvailable}
             />
           </TabsContent>
         </Tabs>

@@ -83,6 +83,14 @@ export function primaryAccount(state: TcState | null): TcAccount | null {
   return best
 }
 
+/** Accounts shown on TeamClaude fleet surfaces (backend gateways remain in Routes). */
+export function fleetAccounts(accounts: readonly TcAccount[]): TcAccount[] {
+  return accounts.filter((account) => {
+    // Why: older TeamClaude mappings may omit kind; the gateway name keeps it out until upgraded.
+    return account.kind !== 'backend' && account.name.toLocaleLowerCase() !== 'cliproxy'
+  })
+}
+
 export const DEFAULT_STALE_MS = 5 * 60 * 1000
 
 /** A bucket is stale when never observed or observed longer ago than the window. */

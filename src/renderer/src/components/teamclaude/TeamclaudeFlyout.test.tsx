@@ -133,4 +133,25 @@ describe('TeamclaudeFlyout offline degradation', () => {
     expect(container.textContent).not.toContain('as of')
     expect(container.querySelector('.opacity-60')).toBeNull()
   })
+
+  it('filters backend gateway accounts from the fleet', () => {
+    act(() =>
+      root.render(
+        <TeamclaudeFlyout
+          state={makeState('owned', READY, {
+            accounts: [
+              account(),
+              account({ id: 'backend', kind: 'backend', name: 'cliproxy' }),
+              account({ id: 'legacy-backend', name: 'CLIProxy' })
+            ]
+          })}
+          controls={controls}
+          onOpenPanel={() => {}}
+        />
+      )
+    )
+    expect(container.textContent).toContain('Alpha')
+    expect(container.textContent).not.toContain('cliproxy')
+    expect(container.textContent).not.toContain('CLIProxy')
+  })
 })

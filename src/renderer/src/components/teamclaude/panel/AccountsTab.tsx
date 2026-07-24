@@ -10,7 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../
 import type { TcAccount, TcState } from '../../../../../shared/teamclaude-types'
 import type { TeamclaudeControls } from '@/hooks/useTeamclaude'
 import { ErrorBadge, STATUS_LABELS, StateDot, ThrottleBadge } from '../teamclaude-atoms'
-import { surfaceGates, TC_MIN_SERVER_VERSION } from '../teamclaude-model'
+import { fleetAccounts, surfaceGates, TC_MIN_SERVER_VERSION } from '../teamclaude-model'
 
 // Why: account administration — pin, disable, and priority. All mutations flow
 // through the injected controls (tc:pin / tc:account:set) and are disabled when
@@ -142,7 +142,7 @@ export function AccountsTab({
 }): React.JSX.Element {
   const { t } = useTranslation()
   const gates = surfaceGates(state)
-  const accounts = state?.accounts ?? []
+  const accounts = fleetAccounts(state?.accounts ?? [])
 
   // Why: an old (adopted-degraded) server lacks the control capability — the fix
   // is an upgrade, so name the concrete have/need versions. Plain offline / other
