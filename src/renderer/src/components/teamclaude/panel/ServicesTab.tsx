@@ -36,14 +36,35 @@ function CliproxyServiceCard({
   const label = CPA_LIFECYCLE_LABELS[lifecycle]
   const startVisible = lifecycle === 'offline' || lifecycle === 'setup-needed'
   const stopVisible = !!state?.owned && (lifecycle === 'owned' || lifecycle === 'restart-required')
+  // Why: `setup-needed` covers several distinct blockers (missing binary,
+  // config drift, unavailable secure storage). Hardcoding the binary-path
+  // guidance for all of them told users to fix a setting that was already
+  // correct, so the copy follows the reason the service actually reported.
+  const setupGuidance = (): string => {
+    switch (state?.reasonKey) {
+      case 'cpa.reason.configDrift':
+      case 'cpa.reason.configMissing':
+        return t(
+          'cliproxy.service.setupConfig',
+          'Orca is repairing its CLIProxyAPI config — start the service to finish.'
+        )
+      case 'cpa.reason.secureSetupUnavailable':
+        return t(
+          'cliproxy.service.setupSecureStorage',
+          'CLIProxyAPI setup needs OS-backed secure storage, which is unavailable.'
+        )
+      default:
+        return t(
+          'cliproxy.service.setupGuidance',
+          'Set the CLIProxyAPI binary path in Settings before starting the service.'
+        )
+    }
+  }
   const reasonSummary = controlError
     ? t('cliproxy.service.actionFailed', 'The CLIProxyAPI service action could not be completed.')
     : state?.reasonKey || lifecycle === 'setup-needed'
       ? lifecycle === 'setup-needed'
-        ? t(
-            'cliproxy.service.setupGuidance',
-            'Set the CLIProxyAPI binary path in Settings before starting the service.'
-          )
+        ? setupGuidance()
         : t('cliproxy.service.attention', 'CLIProxyAPI needs attention.')
       : null
   const run = async (action: () => Promise<CpaActionResult>): Promise<void> => {

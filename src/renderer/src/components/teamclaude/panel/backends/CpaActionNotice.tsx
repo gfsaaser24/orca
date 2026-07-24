@@ -23,6 +23,14 @@ const ACTION_REASON_LABELS: Record<string, { key: string; fallback: string }> = 
   'bridge-unavailable': {
     key: 'cliproxy.action.bridgeUnavailable',
     fallback: 'CLIProxyAPI controls are unavailable in this build.'
+  },
+  'supervisor-unavailable': {
+    key: 'cliproxy.action.supervisorUnavailable',
+    fallback: 'CLIProxyAPI could not finish setup — check the binary path and config below.'
+  },
+  'start-failed': {
+    key: 'cliproxy.action.startFailed',
+    fallback: 'CLIProxyAPI could not start.'
   }
 }
 

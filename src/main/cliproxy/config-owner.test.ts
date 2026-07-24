@@ -111,6 +111,24 @@ describe('CpaConfigOwner', () => {
     expect(await owner.inspect()).toMatchObject({ drifted: true, driftKeys: ['host'] })
   })
 
+  it('self-heals a drifted owned config on ensure, but not while the service runs', async () => {
+    const { owner, setStopped } = await harness()
+    const generated = await owner.ensure()
+    const config = parse(await readFile(generated.configPath, 'utf8'))
+    config.host = '0.0.0.0'
+    await writeFile(generated.configPath, stringify(config))
+    expect(await owner.inspect()).toMatchObject({ drifted: true, driftKeys: ['host'] })
+
+    // A running CPA reloads its config on a watcher — never rewrite under it.
+    setStopped(false)
+    expect(await owner.ensure()).toMatchObject({ drifted: true, driftKeys: ['host'] })
+    expect(parse(await readFile(generated.configPath, 'utf8')).host).toBe('0.0.0.0')
+
+    setStopped(true)
+    expect(await owner.ensure()).toMatchObject({ drifted: false, driftKeys: [] })
+    expect(parse(await readFile(generated.configPath, 'utf8')).host).toBe('127.0.0.1')
+  })
+
   it('writes and drift-tracks the teamclaude claude delegation entry', async () => {
     let delegation: { apiKey: string; baseUrl: string } | null = {
       apiKey: 'tc-proxy-key',

@@ -13531,6 +13531,8 @@
       "loginInProgress": "Finish or cancel the existing login for this provider, then retry.",
       "binaryNotFound": "Set the CLIProxyAPI binary path in the Backends tab before starting the service.",
       "bridgeUnavailable": "CLIProxyAPI controls are unavailable in this build.",
+      "supervisorUnavailable": "CLIProxyAPI could not finish setup — check the binary path and config below.",
+      "startFailed": "CLIProxyAPI could not start.",
       "failed": "The CLIProxyAPI action could not be completed."
     },
     "logs": {
@@ -13632,6 +13634,8 @@
     "service": {
       "actionFailed": "The CLIProxyAPI service action could not be completed.",
       "setupGuidance": "Set the CLIProxyAPI binary path in Settings before starting the service.",
+      "setupConfig": "Orca is repairing its CLIProxyAPI config — start the service to finish.",
+      "setupSecureStorage": "CLIProxyAPI setup needs OS-backed secure storage, which is unavailable.",
       "attention": "CLIProxyAPI needs attention.",
       "owned": "Owned by this Orca",
       "notOwned": "Not owned",

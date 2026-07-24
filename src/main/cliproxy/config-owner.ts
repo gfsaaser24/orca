@@ -76,13 +76,23 @@ export class CpaConfigOwner {
       })
     }
 
-    const inspection = await this.inspectWith(stored, port)
-    if (inspection.missing) {
-      await this.writeConfig(stored, port)
-    }
+    let inspection = await this.inspectWith(stored, port)
     if (inspection.acceptedManagementConfigValue) {
       stored.acceptedManagementConfigValue = inspection.acceptedManagementConfigValue
       await this.writeSecrets(stored)
+    }
+    // Self-heal an Orca-owned config instead of wedging on drift. Every key we
+    // diff is one we generate, and some (the teamclaude delegation) track live
+    // state, so an app upgrade that adds a key would otherwise strand the user
+    // in `setup-needed` with no reachable repair. Only rewrite while the
+    // service is stopped — CPA reloads its config on a 150ms watcher, so a
+    // live rewrite would race a running process.
+    if ((inspection.missing || inspection.drifted) && !inspection.transientRead) {
+      if (!this.isServiceStopped()) {
+        return this.result(stored, port, inspection)
+      }
+      await this.writeConfig(stored, port)
+      inspection = await this.inspectWith(stored, port)
     }
     return this.result(stored, port, inspection)
   }

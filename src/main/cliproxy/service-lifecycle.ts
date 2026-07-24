@@ -81,12 +81,19 @@ export class CpaService {
       invalidateModels: () => {
         this.lastSyncedModels = ''
       },
-      markStopped: () => this.markStopped()
+      markStopped: () => this.markStopped(),
+      restart: () => this.start()
     })
     this.ipc = new CpaIpc({ getState: () => this.state, ...actions })
   }
 
   async start(): Promise<void> {
+    // Re-entrant: serviceStart() calls this to recover from a startup that
+    // bailed before building modules. Tear down anything a prior attempt left
+    // behind so a retry cannot leak a second supervisor, client, or timer.
+    if (this.supervisor || this.refreshTimer) {
+      await this.dispose({ keepIpc: true })
+    }
     const ownedConfig = await this.ensureOwnedConfig()
     if (!ownedConfig) {
       return
@@ -144,13 +151,24 @@ export class CpaService {
     })
   }
 
-  async dispose(): Promise<void> {
+  async dispose(options: { keepIpc?: boolean } = {}): Promise<void> {
     if (this.refreshTimer) {
       clearInterval(this.refreshTimer)
       this.refreshTimer = null
     }
     this.stopModules()
     await this.supervisor?.stop({ killOwned: false })
+    // A restart reuses the same IPC surface (its channels are registered once
+    // per app lifetime); only a real teardown disposes it.
+    if (options.keepIpc) {
+      this.supervisor = null
+      this.client = null
+      this.oauth = null
+      this.usage = null
+      this.modelsSync = null
+      this.provisioning = null
+      return
+    }
     this.ipc.dispose()
   }
 

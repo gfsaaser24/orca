@@ -22,6 +22,11 @@ type CpaServiceActionContext = {
   stopModules(): void
   invalidateModels(): void
   markStopped(): void
+  /** Re-runs the full startup sequence (config ensure + module construction).
+   * Startup bails before building the supervisor whenever the owned config or
+   * secure storage is not usable yet, so "Finish setup" must be able to retry
+   * that sequence rather than fail on a supervisor that never existed. */
+  restart(): Promise<void>
 }
 
 export function createCpaServiceActions(context: CpaServiceActionContext): ActionHandlers {
@@ -67,6 +72,16 @@ export function createCpaServiceActions(context: CpaServiceActionContext): Actio
         context.invalidateModels()
       }),
     async serviceStart(): Promise<CpaActionResult> {
+      // No supervisor means startup bailed before constructing one (drifted or
+      // missing config, secure storage unavailable). Re-run startup first: it
+      // self-heals an owned config, so the retry usually succeeds outright.
+      if (!context.supervisor()) {
+        try {
+          await context.restart()
+        } catch (error) {
+          return cpaFailure('start-failed', messageOf(error))
+        }
+      }
       const supervisor = context.supervisor()
       if (!supervisor) {
         return cpaFailure('supervisor-unavailable', 'CLIProxyAPI setup is incomplete.')
