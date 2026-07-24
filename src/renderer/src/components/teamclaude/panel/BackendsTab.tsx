@@ -182,7 +182,7 @@ export function BackendsTab({
   const models = state?.models ?? []
   const usage = state?.usage ?? []
   return (
-    <div className="max-h-[68vh] space-y-5 overflow-y-auto pr-1 scrollbar-sleek">
+    <div className="max-h-[68vh] min-w-0 space-y-5 overflow-y-auto overflow-x-hidden pr-1 scrollbar-sleek">
       <ReadinessGuidance
         state={state}
         now={now}

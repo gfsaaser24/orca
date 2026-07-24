@@ -310,7 +310,9 @@ export function ProviderCards({
 
   return (
     <div className="space-y-2">
-      <div className="grid gap-2 sm:grid-cols-2">
+      {/* auto-fit: two columns when the dialog is wide, collapsing to one when
+          cards would drop below a usable width — never overflowing the modal. */}
+      <div className="grid gap-2 grid-cols-[repeat(auto-fit,minmax(15rem,1fr))]">
         {OAUTH_PROVIDER_FAMILIES.map((family) => (
           <ProviderCard
             key={family.id}

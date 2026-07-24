@@ -47,11 +47,14 @@ export function TeamclaudePanel({
   const gates = surfaceGates(state)
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
+      {/* min-w-0 on the Tabs grid item: DialogContent is a CSS grid, and grid
+          items default to min-width:auto — without the clamp, wide tab content
+          stretches the implicit column past the dialog and bleeds outside it. */}
+      <DialogContent className="max-w-4xl overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>{t('teamclaude.panel.title', 'TeamClaude')}</DialogTitle>
         </DialogHeader>
-        <Tabs defaultValue="accounts" className="w-full">
+        <Tabs defaultValue="accounts" className="w-full min-w-0 max-w-full">
           <TabsList>
             <TabsTrigger value="accounts">{t('teamclaude.panel.accounts', 'Accounts')}</TabsTrigger>
             <TabsTrigger value="routes">{t('teamclaude.panel.routes', 'Routes')}</TabsTrigger>
