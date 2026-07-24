@@ -45,10 +45,12 @@ type RawQuota = {
   unified7d?: number | null
   unified7dSonnet?: number | null
   unified7dFable?: number | null
+  unified7dOpus?: number | null
   unified5hReset?: number | null
   unified7dReset?: number | null
   unified7dSonnetReset?: number | null
   unified7dFableReset?: number | null
+  unified7dOpusReset?: number | null
 }
 type RawAccount = {
   id?: string
@@ -273,7 +275,8 @@ function toAccount(
       unified5h: buildBucket(q.unified5h, q.unified5hReset, obs.unified5h),
       unified7d: buildBucket(q.unified7d, q.unified7dReset, obs.unified7d),
       unified7dFable: buildBucket(q.unified7dFable, q.unified7dFableReset, obs.unified7dFable),
-      unified7dSonnet: buildBucket(q.unified7dSonnet, q.unified7dSonnetReset, obs.unified7dSonnet)
+      unified7dSonnet: buildBucket(q.unified7dSonnet, q.unified7dSonnetReset, obs.unified7dSonnet),
+      unified7dOpus: buildBucket(q.unified7dOpus, q.unified7dOpusReset, obs.unified7dOpus)
     }
   }
 }

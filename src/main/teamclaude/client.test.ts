@@ -167,9 +167,11 @@ describe('parseStatus — quota + pin mapping (real server shape)', () => {
           unified5hReset: 1_800_000_000_000,
           unified7d: 1.5, // >100% upstream → overage
           unified7dReset: 1_800_100_000_000,
-          unified7dFable: 0
+          unified7dFable: 0,
+          unified7dOpus: 0.73,
+          unified7dOpusReset: 1_800_200_000_000
         },
-        observedAt: { unified5h: OBSERVED, unified7d: OBSERVED }
+        observedAt: { unified5h: OBSERVED, unified7d: OBSERVED, unified7dOpus: OBSERVED }
       },
       { id: 'uuid-2:org-2', name: 'personal', status: 'throttled', quota: {}, observedAt: {} }
     ]
@@ -188,6 +190,12 @@ describe('parseStatus — quota + pin mapping (real server shape)', () => {
     expect(work.buckets.unified7d).toMatchObject({ usedPercent: 100, overage: true })
     // 0 fraction is a real observation → a bucket (0%), not null
     expect(work.buckets.unified7dFable).toMatchObject({ usedPercent: 0, overage: false })
+    expect(work.buckets.unified7dOpus).toEqual({
+      usedPercent: 73,
+      overage: false,
+      resetsAt: 1_800_200_000_000,
+      observedAt: Date.parse(OBSERVED)
+    })
     // absent bucket → null
     expect(work.buckets.unified7dSonnet).toBeNull()
   })
@@ -294,6 +302,12 @@ describe('routes mapping (A5)', () => {
           accounts: ['work', 'personal'],
           bucket: 'unified7dFable'
         },
+        {
+          name: 'opus',
+          match: ['*opus*'],
+          accounts: ['work'],
+          bucket: 'unified7dOpus'
+        },
         { name: 'default', match: ['*'] } // accounts/bucket omitted when empty
       ]
     })
@@ -303,6 +317,12 @@ describe('routes mapping (A5)', () => {
         match: ['*fable*'],
         accounts: ['work', 'personal'],
         bucket: 'unified7dFable'
+      },
+      {
+        name: 'opus',
+        match: ['*opus*'],
+        accounts: ['work'],
+        bucket: 'unified7dOpus'
       },
       { name: 'default', match: ['*'], accounts: [], bucket: null }
     ])

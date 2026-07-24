@@ -124,7 +124,8 @@ function mapTeamclaudeAccountToClaudeRateLimits(account: TcAccount): ProviderRat
     account.buckets.unified5h,
     account.buckets.unified7d,
     account.buckets.unified7dFable,
-    account.buckets.unified7dSonnet
+    account.buckets.unified7dSonnet,
+    account.buckets.unified7dOpus
   ]
     .map((bucket) => bucket?.observedAt)
     .filter((value): value is number => typeof value === 'number')

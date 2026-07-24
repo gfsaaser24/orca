@@ -38,7 +38,8 @@ function account(overrides: Partial<TcAccount> = {}): TcAccount {
       unified5h: { usedPercent: 30, overage: false, resetsAt: null, observedAt: 0 },
       unified7d: null,
       unified7dFable: null,
-      unified7dSonnet: null
+      unified7dSonnet: null,
+      unified7dOpus: null
     },
     ...overrides
   }
@@ -132,6 +133,47 @@ describe('TeamclaudeFlyout offline degradation', () => {
     expect(container.textContent).toContain('Alpha')
     expect(container.textContent).not.toContain('as of')
     expect(container.querySelector('.opacity-60')).toBeNull()
+  })
+
+  it('renders the Opus weekly bucket after Fable and Sonnet', () => {
+    const quotaBucket = (usedPercent: number) => ({
+      usedPercent,
+      overage: false,
+      resetsAt: null,
+      observedAt: 1
+    })
+    act(() =>
+      root.render(
+        <TeamclaudeFlyout
+          state={makeState('owned', READY, {
+            accounts: [
+              account({
+                buckets: {
+                  ...account().buckets,
+                  unified7dFable: quotaBucket(22),
+                  unified7dSonnet: quotaBucket(33),
+                  unified7dOpus: quotaBucket(44)
+                }
+              })
+            ]
+          })}
+          controls={controls}
+          onOpenPanel={() => {}}
+          now={1}
+        />
+      )
+    )
+
+    const text = container.textContent ?? ''
+    expect(text).toContain('Fable 7d')
+    expect(text).toContain('Sonnet 7d')
+    expect(text).toContain('Opus 7d')
+    expect(text.indexOf('Fable 7d')).toBeLessThan(text.indexOf('Sonnet 7d'))
+    expect(text.indexOf('Sonnet 7d')).toBeLessThan(text.indexOf('Opus 7d'))
+    const opusBar = container.querySelector(
+      '[role="progressbar"][aria-label="Alpha Opus 7d usage"]'
+    )
+    expect(opusBar?.getAttribute('aria-valuenow')).toBe('44')
   })
 
   it('filters backend gateway accounts from the fleet', () => {

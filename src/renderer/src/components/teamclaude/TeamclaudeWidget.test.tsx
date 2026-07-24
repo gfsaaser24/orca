@@ -28,7 +28,8 @@ function account(overrides: Partial<TcAccount> = {}): TcAccount {
       unified5h: { usedPercent: 20, overage: false, resetsAt: null, observedAt: Date.now() },
       unified7d: { usedPercent: 72, overage: false, resetsAt: null, observedAt: Date.now() },
       unified7dFable: { usedPercent: 5, overage: false, resetsAt: null, observedAt: Date.now() },
-      unified7dSonnet: { usedPercent: 5, overage: false, resetsAt: null, observedAt: Date.now() }
+      unified7dSonnet: { usedPercent: 5, overage: false, resetsAt: null, observedAt: Date.now() },
+      unified7dOpus: { usedPercent: 5, overage: false, resetsAt: null, observedAt: Date.now() }
     },
     ...overrides
   }

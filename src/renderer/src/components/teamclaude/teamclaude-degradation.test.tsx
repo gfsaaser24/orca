@@ -27,7 +27,13 @@ function account(): TcAccount {
     priority: 1,
     pinned: false,
     orcaAccountId: null,
-    buckets: { unified5h: null, unified7d: null, unified7dFable: null, unified7dSonnet: null }
+    buckets: {
+      unified5h: null,
+      unified7d: null,
+      unified7dFable: null,
+      unified7dSonnet: null,
+      unified7dOpus: null
+    }
   }
 }
 

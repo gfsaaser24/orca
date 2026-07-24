@@ -9,6 +9,8 @@ import type {
   TcState
 } from '../../../../shared/teamclaude-types'
 import {
+  BUCKET_KEYS,
+  BUCKET_LABELS,
   hasLaunchedUnrouted,
   inFlightRequestCount,
   isActivityRowPending,
@@ -39,7 +41,8 @@ function account(overrides: Partial<TcAccount> = {}): TcAccount {
       unified5h: bucket({ usedPercent: 20 }),
       unified7d: bucket({ usedPercent: 40 }),
       unified7dFable: bucket({ usedPercent: 10 }),
-      unified7dSonnet: bucket({ usedPercent: 5 })
+      unified7dSonnet: bucket({ usedPercent: 5 }),
+      unified7dOpus: bucket({ usedPercent: 55 })
     },
     ...overrides
   }
@@ -73,8 +76,22 @@ const READY: TcReadiness = { usageReady: true, routingReady: true, controlReady:
 describe('worstBucket', () => {
   it('picks the highest-usage non-null bucket', () => {
     const worst = worstBucket(account())
-    expect(worst?.key).toBe('unified7d')
-    expect(worst?.bucket.usedPercent).toBe(40)
+    expect(worst?.key).toBe('unified7dOpus')
+    expect(worst?.bucket.usedPercent).toBe(55)
+  })
+
+  it('orders and labels the Opus bucket after the existing family buckets', () => {
+    expect(BUCKET_KEYS).toEqual([
+      'unified5h',
+      'unified7d',
+      'unified7dFable',
+      'unified7dSonnet',
+      'unified7dOpus'
+    ])
+    expect(BUCKET_LABELS.unified7dOpus).toEqual({
+      key: 'teamclaude.bucket.opus',
+      fallback: 'Opus 7d'
+    })
   })
 
   it('returns null when all buckets are null', () => {
@@ -83,7 +100,8 @@ describe('worstBucket', () => {
         unified5h: null,
         unified7d: null,
         unified7dFable: null,
-        unified7dSonnet: null
+        unified7dSonnet: null,
+        unified7dOpus: null
       }
     })
     expect(worstBucket(empty)).toBeNull()
@@ -111,7 +129,8 @@ describe('primaryAccount', () => {
             unified5h: bucket({ usedPercent: 90 }),
             unified7d: null,
             unified7dFable: null,
-            unified7dSonnet: null
+            unified7dSonnet: null,
+            unified7dOpus: null
           }
         })
       ]
