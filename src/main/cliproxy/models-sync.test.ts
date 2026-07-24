@@ -59,19 +59,13 @@ describe('createModelsSync', () => {
         data: [model('gpt-5.4'), model('gpt-5.4-mini')]
       }))
     }
-    const existingFable: Route = {
+    const existing: Route = {
       name: 'fable',
       match: ['*fable*'],
       accounts: ['work'],
       bucket: 'unified7dFable'
     }
-    const existingOpus: Route = {
-      name: 'opus',
-      match: ['*opus*'],
-      accounts: ['work'],
-      bucket: 'unified7dOpus'
-    }
-    const control = createControl([existingFable, existingOpus])
+    const control = createControl([existing])
     const sync = createModelsSync(client as never, control)
 
     await settle(sync.forceSync())
@@ -82,8 +76,7 @@ describe('createModelsSync', () => {
         match: ['gpt-5.4', 'gpt-5.4-mini'],
         accounts: ['cliproxy']
       },
-      existingFable,
-      existingOpus
+      existing
     ])
     expect(control.setAccount).toHaveBeenCalledWith({
       id: 'cliproxy',

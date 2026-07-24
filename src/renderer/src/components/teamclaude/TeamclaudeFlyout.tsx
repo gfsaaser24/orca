@@ -24,9 +24,9 @@ import {
   surfaceGates
 } from './teamclaude-model'
 
-// Why: the expanded per-account view. Every bucket (including family-specific
-// weekly buckets) gets its own bar, reset countdown, and overage/stale badges.
-// Per-account throttle/error badges and a session-scoped pin control sit in the header.
+// Why: the expanded per-account view. Every bucket (including the Fable bucket)
+// gets its own bar, reset countdown, and overage/stale badges; per-account
+// throttle/error badges and a session-scoped pin control sit in the header.
 
 function AccountBuckets({ account, now }: { account: TcAccount; now: number }): React.JSX.Element {
   const { t } = useTranslation()

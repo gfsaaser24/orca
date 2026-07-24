@@ -53,8 +53,6 @@ export type TcAccount = {
     unified7d: TcQuotaBucket | null
     unified7dFable: TcQuotaBucket | null
     unified7dSonnet: TcQuotaBucket | null
-    /** Opus-family weekly bucket (claude-opus-5+); null until upstream meters it. */
-    unified7dOpus: TcQuotaBucket | null
   }
 }
 

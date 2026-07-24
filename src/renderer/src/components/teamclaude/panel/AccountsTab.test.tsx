@@ -22,28 +22,9 @@ function account(overrides: Partial<TcAccount> = {}): TcAccount {
       unified5h: null,
       unified7d: null,
       unified7dFable: null,
-      unified7dSonnet: null,
-      unified7dOpus: null
+      unified7dSonnet: null
     },
     ...overrides
-  }
-}
-
-function makeState(accounts: TcAccount[]): TcState {
-  return {
-    lifecycle: 'owned',
-    readiness: { usageReady: true, routingReady: true, controlReady: true },
-    reasonKey: null,
-    reasonDetail: null,
-    port: 3456,
-    serverVersion: '1.2.0',
-    bootId: 'boot',
-    capabilities: [],
-    owned: true,
-    currentAccount: null,
-    accounts,
-    routes: [],
-    snapshotAt: 1
   }
 }
 
@@ -66,49 +47,30 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('AccountsTab', () => {
+describe('AccountsTab backend filtering', () => {
   it('keeps kind and legacy-name backend accounts out of the fleet', () => {
-    const state = makeState([
-      account(),
-      account({ id: 'backend', kind: 'backend', name: 'cliproxy' }),
-      account({ id: 'legacy', name: 'CLIProxy' })
-    ])
+    const state: TcState = {
+      lifecycle: 'owned',
+      readiness: { usageReady: true, routingReady: true, controlReady: true },
+      reasonKey: null,
+      reasonDetail: null,
+      port: 3456,
+      serverVersion: '1.2.0',
+      bootId: 'boot',
+      capabilities: [],
+      owned: true,
+      currentAccount: null,
+      accounts: [
+        account(),
+        account({ id: 'backend', kind: 'backend', name: 'cliproxy' }),
+        account({ id: 'legacy', name: 'CLIProxy' })
+      ],
+      routes: [],
+      snapshotAt: 1
+    }
     act(() => root.render(<AccountsTab state={state} controls={controls} />))
     expect(container.textContent).toContain('Anthropic fleet')
     expect(container.textContent).not.toContain('cliproxy')
     expect(container.textContent).not.toContain('CLIProxy')
-  })
-
-  it('renders the Opus weekly bucket after Fable and Sonnet', () => {
-    const observedAt = Date.now()
-    const quotaBucket = (usedPercent: number) => ({
-      usedPercent,
-      overage: false,
-      resetsAt: null,
-      observedAt
-    })
-    const state = makeState([
-      account({
-        buckets: {
-          ...account().buckets,
-          unified7dFable: quotaBucket(21),
-          unified7dSonnet: quotaBucket(32),
-          unified7dOpus: quotaBucket(43)
-        }
-      })
-    ])
-
-    act(() => root.render(<AccountsTab state={state} controls={controls} />))
-
-    const text = container.textContent ?? ''
-    expect(text).toContain('Fable 7d')
-    expect(text).toContain('Sonnet 7d')
-    expect(text).toContain('Opus 7d')
-    expect(text.indexOf('Fable 7d')).toBeLessThan(text.indexOf('Sonnet 7d'))
-    expect(text.indexOf('Sonnet 7d')).toBeLessThan(text.indexOf('Opus 7d'))
-    const opusBar = container.querySelector(
-      '[role="progressbar"][aria-label="Anthropic fleet Opus 7d usage"]'
-    )
-    expect(opusBar?.getAttribute('aria-valuenow')).toBe('43')
   })
 })

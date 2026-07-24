@@ -9,24 +9,10 @@ import { Checkbox } from '../../ui/checkbox'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../ui/tooltip'
 import type { TcAccount, TcState } from '../../../../../shared/teamclaude-types'
 import type { TeamclaudeControls } from '@/hooks/useTeamclaude'
-import {
-  BucketBadges,
-  ErrorBadge,
-  QuotaBar,
-  ResetCountdown,
-  STATUS_LABELS,
-  StateDot,
-  ThrottleBadge
-} from '../teamclaude-atoms'
-import {
-  BUCKET_KEYS,
-  BUCKET_LABELS,
-  fleetAccounts,
-  surfaceGates,
-  TC_MIN_SERVER_VERSION
-} from '../teamclaude-model'
+import { ErrorBadge, STATUS_LABELS, StateDot, ThrottleBadge } from '../teamclaude-atoms'
+import { fleetAccounts, surfaceGates, TC_MIN_SERVER_VERSION } from '../teamclaude-model'
 
-// Why: account administration also shows the flyout's per-account quota detail. Mutations flow
+// Why: account administration — pin, disable, and priority. All mutations flow
 // through the injected controls (tc:pin / tc:account:set) and are disabled when
 // the control surface is not ready (never gated on raw transport). When a
 // control is disabled, the specific reason rides a per-control tooltip (with a
@@ -63,132 +49,86 @@ function DisabledReason({
   )
 }
 
-function AccountBuckets({ account, now }: { account: TcAccount; now: number }): React.JSX.Element {
-  const { t } = useTranslation()
-  return (
-    <div className="flex flex-col gap-1.5">
-      {BUCKET_KEYS.map((key) => {
-        const bucket = account.buckets[key]
-        const label = t(BUCKET_LABELS[key].key, BUCKET_LABELS[key].fallback)
-        return (
-          <div key={key} className="flex items-center gap-2">
-            <span className="w-14 shrink-0 text-[10px] text-muted-foreground">{label}</span>
-            {bucket ? (
-              <>
-                <QuotaBar
-                  usedPercent={bucket.usedPercent}
-                  overage={bucket.overage}
-                  className="flex-1"
-                  label={t('teamclaude.flyout.bucketAria', '{{value0}} {{value1}} usage', {
-                    value0: account.name,
-                    value1: label
-                  })}
-                />
-                <span className="w-9 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground">
-                  {Math.round(bucket.usedPercent)}%
-                </span>
-                <span className="flex w-32 shrink-0 items-center justify-end gap-1">
-                  <ResetCountdown resetsAt={bucket.resetsAt} now={now} />
-                  <BucketBadges bucket={bucket} now={now} />
-                </span>
-              </>
-            ) : (
-              <span className="flex-1 text-[10px] text-muted-foreground/70">
-                {t('teamclaude.flyout.noBucket', 'no data')}
-              </span>
-            )}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
 function AccountRow({
   account,
   controls,
   enabled,
-  disabledReason,
-  now
+  disabledReason
 }: {
   account: TcAccount
   controls: TeamclaudeControls
   enabled: boolean
   disabledReason: string
-  now: number
 }): React.JSX.Element {
   const { t } = useTranslation()
   const disabled = account.status === 'disabled'
   const statusLabel = t(STATUS_LABELS[account.status].key, STATUS_LABELS[account.status].fallback)
   return (
-    <div className="flex flex-col gap-2 border-b border-border py-2 last:border-b-0">
-      <div className="flex items-center gap-3">
-        <StateDot state={account.status} label={statusLabel} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium">{account.name}</span>
-            {account.status === 'throttled' ? <ThrottleBadge /> : null}
-            {account.status === 'error' ? <ErrorBadge /> : null}
-          </div>
-          {account.email ? (
-            <span className="truncate text-xs text-muted-foreground">{account.email}</span>
-          ) : null}
+    <div className="flex items-center gap-3 border-b border-border py-2 last:border-b-0">
+      <StateDot state={account.status} label={statusLabel} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="truncate text-sm font-medium">{account.name}</span>
+          {account.status === 'throttled' ? <ThrottleBadge /> : null}
+          {account.status === 'error' ? <ErrorBadge /> : null}
         </div>
+        {account.email ? (
+          <span className="truncate text-xs text-muted-foreground">{account.email}</span>
+        ) : null}
+      </div>
 
-        <div className="flex items-center gap-1.5">
-          <Label htmlFor={`tc-priority-${account.id}`} className="text-xs text-muted-foreground">
-            {t('teamclaude.accounts.priority', 'Priority')}
-          </Label>
-          <DisabledReason reason={disabledReason} disabled={!enabled}>
-            <Input
-              id={`tc-priority-${account.id}`}
-              type="number"
-              value={account.priority}
-              disabled={!enabled}
-              className="h-7 w-16"
-              onChange={(event) => {
-                const priority = Number.parseInt(event.target.value, 10)
-                if (!Number.isNaN(priority)) {
-                  controls.setAccount({ id: account.id, priority })
-                }
-              }}
-            />
-          </DisabledReason>
-        </div>
-
+      <div className="flex items-center gap-1.5">
+        <Label htmlFor={`tc-priority-${account.id}`} className="text-xs text-muted-foreground">
+          {t('teamclaude.accounts.priority', 'Priority')}
+        </Label>
         <DisabledReason reason={disabledReason} disabled={!enabled}>
-          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Checkbox
-              checked={disabled}
-              disabled={!enabled}
-              onCheckedChange={(checked) =>
-                controls.setAccount({ id: account.id, disabled: checked === true })
-              }
-              aria-label={t('teamclaude.accounts.disable', 'Disable {{value0}}', {
-                value0: account.name
-              })}
-            />
-            {t('teamclaude.accounts.disabled', 'Disabled')}
-          </label>
-        </DisabledReason>
-
-        <DisabledReason reason={disabledReason} disabled={!enabled}>
-          <Button
-            size="icon-sm"
-            variant={account.pinned ? 'secondary' : 'ghost'}
+          <Input
+            id={`tc-priority-${account.id}`}
+            type="number"
+            value={account.priority}
             disabled={!enabled}
-            onClick={() => controls.pin(account.pinned ? null : account.id)}
-            aria-label={
-              account.pinned
-                ? t('teamclaude.flyout.unpin', 'Unpin {{value0}}', { value0: account.name })
-                : t('teamclaude.flyout.pin', 'Pin {{value0}}', { value0: account.name })
-            }
-          >
-            {account.pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
-          </Button>
+            className="h-7 w-16"
+            onChange={(event) => {
+              const priority = Number.parseInt(event.target.value, 10)
+              if (!Number.isNaN(priority)) {
+                controls.setAccount({ id: account.id, priority })
+              }
+            }}
+          />
         </DisabledReason>
       </div>
-      <AccountBuckets account={account} now={now} />
+
+      <DisabledReason reason={disabledReason} disabled={!enabled}>
+        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Checkbox
+            checked={disabled}
+            disabled={!enabled}
+            onCheckedChange={(checked) =>
+              controls.setAccount({ id: account.id, disabled: checked === true })
+            }
+            aria-label={t('teamclaude.accounts.disable', 'Disable {{value0}}', {
+              value0: account.name
+            })}
+          />
+          {t('teamclaude.accounts.disabled', 'Disabled')}
+        </label>
+      </DisabledReason>
+
+      <DisabledReason reason={disabledReason} disabled={!enabled}>
+        <Button
+          size="icon-sm"
+          variant={account.pinned ? 'secondary' : 'ghost'}
+          disabled={!enabled}
+          onClick={() => controls.pin(account.pinned ? null : account.id)}
+          aria-label={
+            account.pinned
+              ? t('teamclaude.flyout.unpin', 'Unpin {{value0}}', { value0: account.name })
+              : t('teamclaude.flyout.pin', 'Pin {{value0}}', { value0: account.name })
+          }
+        >
+          {account.pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+        </Button>
+      </DisabledReason>
     </div>
   )
 }
@@ -203,7 +143,6 @@ export function AccountsTab({
   const { t } = useTranslation()
   const gates = surfaceGates(state)
   const accounts = fleetAccounts(state?.accounts ?? [])
-  const now = Date.now()
 
   // Why: an old (adopted-degraded) server lacks the control capability — the fix
   // is an upgrade, so name the concrete have/need versions. Plain offline / other
@@ -234,7 +173,6 @@ export function AccountsTab({
             controls={controls}
             enabled={gates.controlsEnabled}
             disabledReason={disabledReason}
-            now={now}
           />
         ))}
       </div>

@@ -9,12 +9,7 @@ import type {
 // Keeping them here (not inline in components) makes the degradation matrix and
 // the worst-bucket / staleness math directly unit-testable without a DOM.
 
-export type BucketKey =
-  | 'unified5h'
-  | 'unified7d'
-  | 'unified7dFable'
-  | 'unified7dSonnet'
-  | 'unified7dOpus'
+export type BucketKey = 'unified5h' | 'unified7d' | 'unified7dFable' | 'unified7dSonnet'
 
 /**
  * Minimum TeamClaude server version Orca TC's cockpit requires for full
@@ -32,8 +27,7 @@ export const BUCKET_KEYS: readonly BucketKey[] = [
   'unified5h',
   'unified7d',
   'unified7dFable',
-  'unified7dSonnet',
-  'unified7dOpus'
+  'unified7dSonnet'
 ]
 
 /** Localization key + English fallback for each bucket label. */
@@ -41,8 +35,7 @@ export const BUCKET_LABELS: Record<BucketKey, { key: string; fallback: string }>
   unified5h: { key: 'teamclaude.bucket.unified5h', fallback: '5h' },
   unified7d: { key: 'teamclaude.bucket.unified7d', fallback: '7d' },
   unified7dFable: { key: 'teamclaude.bucket.fable', fallback: 'Fable 7d' },
-  unified7dSonnet: { key: 'teamclaude.bucket.sonnet', fallback: 'Sonnet 7d' },
-  unified7dOpus: { key: 'teamclaude.bucket.opus', fallback: 'Opus 7d' }
+  unified7dSonnet: { key: 'teamclaude.bucket.sonnet', fallback: 'Sonnet 7d' }
 }
 
 export type WorstBucket = {

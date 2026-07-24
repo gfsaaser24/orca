@@ -1073,9 +1073,8 @@ describe('RateLimitService', () => {
         buckets: {
           unified5h: { usedPercent: 42, overage: false, resetsAt: 111, observedAt: 999 },
           unified7d: { usedPercent: 10, overage: false, resetsAt: 222, observedAt: 888 },
-          unified7dFable: { usedPercent: 33, overage: false, resetsAt: 333, observedAt: 777 },
-          unified7dSonnet: null,
-          unified7dOpus: { usedPercent: 88, overage: false, resetsAt: 444, observedAt: 1234 }
+          unified7dFable: null,
+          unified7dSonnet: null
         },
         ...overrides
       }
@@ -1107,13 +1106,8 @@ describe('RateLimitService', () => {
       expect(claude?.session?.windowMinutes).toBe(300)
       expect(claude?.session?.resetsAt).toBe(111)
       expect(claude?.weekly?.usedPercent).toBe(10)
-      expect(claude?.fableWeekly).toMatchObject({
-        usedPercent: 33,
-        windowMinutes: 10080,
-        resetsAt: 333
-      })
       // Freshness is the freshest bucket observedAt — never HTTP receipt time.
-      expect(claude?.updatedAt).toBe(1234)
+      expect(claude?.updatedAt).toBe(999)
       // Other providers still fetch natively.
       expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
     })
