@@ -129,6 +129,26 @@ describe('CpaConfigOwner', () => {
     expect(parse(await readFile(generated.configPath, 'utf8')).host).toBe('127.0.0.1')
   })
 
+  it('converges after a rewrite even once CPA has hashed the management key', async () => {
+    const { owner } = await harness()
+    const generated = await owner.ensure()
+    const config = parse(await readFile(generated.configPath, 'utf8'))
+
+    // CPA replaces the plaintext key with a bcrypt hash on its first start;
+    // inspect() accepts that and remembers the hash as the accepted value.
+    config['remote-management']['secret-key'] =
+      '$2a$10$abcdefghijklmnopqrstuvwxyz012345678901234567890123456'
+    await writeFile(generated.configPath, stringify(config))
+    expect(await owner.inspect()).toMatchObject({ drifted: false })
+
+    // A later manifest change forces a rewrite, which re-emits the PLAINTEXT
+    // key. That must not be diffed against the remembered hash forever.
+    config.host = '0.0.0.0'
+    await writeFile(generated.configPath, stringify(config))
+    expect(await owner.ensure()).toMatchObject({ drifted: false, driftKeys: [] })
+    expect(await owner.inspect()).toMatchObject({ drifted: false, driftKeys: [] })
+  })
+
   it('writes and drift-tracks the teamclaude claude delegation entry', async () => {
     let delegation: { apiKey: string; baseUrl: string } | null = {
       apiKey: 'tc-proxy-key',

@@ -243,6 +243,15 @@ export class CpaConfigOwner {
       ]
     }
     await atomicWrite(this.configPath, stringify(document), 0o600)
+    // The file now holds the PLAINTEXT management key; CPA replaces it with a
+    // bcrypt hash on its next start, and that hash gets remembered as the
+    // accepted value. Reset the accepted value to the plaintext we just wrote,
+    // or a rewrite would be diffed against a hash from an earlier run and
+    // drift forever (rewrite -> still drifted -> rewrite ...).
+    if (secrets.acceptedManagementConfigValue !== secrets.managementKey) {
+      secrets.acceptedManagementConfigValue = secrets.managementKey
+      await this.writeSecrets(secrets)
+    }
   }
 
   /** teamclaude fleet delegation for CPA's Claude provider. A resolver failure
