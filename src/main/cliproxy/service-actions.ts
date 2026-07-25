@@ -27,6 +27,8 @@ type CpaServiceActionContext = {
    * secure storage is not usable yet, so "Finish setup" must be able to retry
    * that sequence rather than fail on a supervisor that never existed. */
   restart(): Promise<void>
+  /** Opens a provider authorize URL in the user's default browser. */
+  openExternal(url: string): Promise<void>
 }
 
 export function createCpaServiceActions(context: CpaServiceActionContext): ActionHandlers {
@@ -50,8 +52,16 @@ export function createCpaServiceActions(context: CpaServiceActionContext): Actio
   }
 
   return {
-    loginStart(provider: CpaProviderKind): Promise<CpaOauthFlow | CpaActionResult> {
-      return context.oauth()?.start(provider) ?? unavailableFlow()
+    async loginStart(provider: CpaProviderKind): Promise<CpaOauthFlow | CpaActionResult> {
+      const flow = await (context.oauth()?.start(provider) ?? unavailableFlow())
+      // A `browser` flow only returns the authorize URL — something has to open
+      // it. Without this the UI sat on "Waiting for sign-in in your browser…"
+      // while no browser ever appeared. Device flows show their URL + code in
+      // the dialog instead, so they must not be auto-opened.
+      if ('kind' in flow && flow.kind === 'browser' && flow.url) {
+        void context.openExternal(flow.url)
+      }
+      return flow
     },
     loginPoll(state: string): Promise<CpaOauthStatus> {
       return context.oauth()?.poll(state) ?? Promise.resolve('error')

@@ -208,7 +208,7 @@ function ProviderCard({
         ))
       )}
       {pendingHere && activeFlow.flow.kind === 'browser' ? (
-        <BrowserLoginPending onCancel={onCancel} />
+        <BrowserLoginPending url={activeFlow.flow.url} onCancel={onCancel} />
       ) : null}
     </section>
   )

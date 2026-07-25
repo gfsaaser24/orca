@@ -24,6 +24,7 @@ function context(overrides: Partial<Parameters<typeof createCpaServiceActions>[0
     invalidateModels: () => undefined,
     markStopped: () => undefined,
     restart,
+    openExternal: async () => undefined,
     ...overrides
   })
   return { actions, restart, supervisor }
@@ -65,12 +66,55 @@ describe('serviceStart', () => {
       stopModules: () => undefined,
       invalidateModels: () => undefined,
       markStopped: () => undefined,
-      restart
+      restart,
+      openExternal: async () => undefined
     })
 
     await expect(actions.serviceStart()).resolves.toEqual({ ok: true })
 
     expect(restart).not.toHaveBeenCalled()
     expect(supervisor.retry).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('loginStart', () => {
+  const oauthReturning = (flow: unknown) => (): never => ({ start: async () => flow }) as never
+
+  it('opens the authorize URL for a browser flow', async () => {
+    const openExternal = vi.fn(async () => undefined)
+    const flow = { kind: 'browser', state: 's1', url: 'https://auth.example/login' }
+    const { actions } = context({ oauth: oauthReturning(flow), openExternal })
+
+    await expect(actions.loginStart('codex')).resolves.toEqual(flow)
+
+    expect(openExternal).toHaveBeenCalledWith('https://auth.example/login')
+  })
+
+  it('does not auto-open a device flow — its dialog shows the URL and code', async () => {
+    const openExternal = vi.fn(async () => undefined)
+    const flow = {
+      kind: 'device',
+      state: 's2',
+      url: 'https://auth.example/device',
+      userCode: 'ABCD-1234',
+      expiresIn: 600
+    }
+    const { actions } = context({ oauth: oauthReturning(flow), openExternal })
+
+    await expect(actions.loginStart('kimi')).resolves.toEqual(flow)
+
+    expect(openExternal).not.toHaveBeenCalled()
+  })
+
+  it('does not try to open anything when the flow could not start', async () => {
+    const openExternal = vi.fn(async () => undefined)
+    const { actions } = context({
+      oauth: oauthReturning({ ok: false, reason: 'port-busy', message: 'busy' }),
+      openExternal
+    })
+
+    await expect(actions.loginStart('codex')).resolves.toMatchObject({ ok: false })
+
+    expect(openExternal).not.toHaveBeenCalled()
   })
 })

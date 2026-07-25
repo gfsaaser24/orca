@@ -13,17 +13,35 @@ import {
 } from '../../../ui/dialog'
 import type { CpaOauthFlow } from '../../../../../../shared/cliproxy-types'
 
-export function BrowserLoginPending({ onCancel }: { onCancel: () => void }): React.JSX.Element {
+export function BrowserLoginPending({
+  url,
+  onCancel
+}: {
+  url?: string
+  onCancel: () => void
+}): React.JSX.Element {
   const { t } = useTranslation()
   return (
-    <div className="flex items-center gap-2 rounded-md bg-muted/50 px-2 py-1.5 text-xs">
-      <Loader2 className="size-3.5 animate-spin" />
-      <span className="min-w-0 flex-1">
-        {t('cliproxy.login.browserPending', 'Waiting for sign-in in your browser…')}
-      </span>
-      <Button type="button" variant="ghost" size="xs" onClick={onCancel}>
-        {t('cliproxy.login.cancel', 'Cancel')}
-      </Button>
+    <div className="space-y-1.5 rounded-md bg-muted/50 px-2 py-1.5 text-xs">
+      <div className="flex items-center gap-2">
+        <Loader2 className="size-3.5 shrink-0 animate-spin" />
+        <span className="min-w-0 flex-1">
+          {t('cliproxy.login.browserPending', 'Waiting for sign-in in your browser…')}
+        </span>
+        <Button type="button" variant="ghost" size="xs" onClick={onCancel}>
+          {t('cliproxy.login.cancel', 'Cancel')}
+        </Button>
+      </div>
+      {/* Why: the browser is opened for you, but show the URL anyway — if the
+          handoff fails there is otherwise no way to reach the sign-in page. */}
+      {url ? (
+        <div className="space-y-1">
+          <p className="text-muted-foreground">
+            {t('cliproxy.login.browserFallback', 'If no browser opened, use this link:')}
+          </p>
+          <p className="break-all font-mono text-[10px] text-muted-foreground">{url}</p>
+        </div>
+      ) : null}
     </div>
   )
 }

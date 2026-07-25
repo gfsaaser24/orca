@@ -13589,6 +13589,7 @@
     "login": {
       "success": "{{value0}} new models routable",
       "browserPending": "Waiting for sign-in in your browser…",
+      "browserFallback": "If no browser opened, use this link:",
       "cancel": "Cancel",
       "deviceTitle": "Finish device sign-in",
       "deviceDescription": "Open the provider page and enter this one-time code.",

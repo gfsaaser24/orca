@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { shell } from 'electron'
 import type { CpaState } from '../../shared/cliproxy-types'
 import { getCanonicalUserDataPath, type Store } from '../persistence'
 import { createCliProxyApiProfile } from '../services/profiles/cliproxyapi'
@@ -82,7 +83,14 @@ export class CpaService {
         this.lastSyncedModels = ''
       },
       markStopped: () => this.markStopped(),
-      restart: () => this.start()
+      restart: () => this.start(),
+      openExternal: async (url) => {
+        try {
+          await shell.openExternal(url)
+        } catch (error) {
+          console.warn(`[cliproxy] could not open the sign-in URL: ${messageOf(error)}`)
+        }
+      }
     })
     this.ipc = new CpaIpc({ getState: () => this.state, ...actions })
   }
