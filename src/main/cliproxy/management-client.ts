@@ -157,6 +157,27 @@ export class ManagementClient {
     return this.managementJson('DELETE', `/oauth-session?state=${encodeURIComponent(state)}`)
   }
 
+  /** Hand a browser redirect that Orca captured on loopback back to CPA, which
+   * completes the token exchange for the pending session. */
+  completeOauthCallback(params: {
+    provider: string
+    code: string
+    state: string
+    error: string
+  }): Promise<{ status: string }> {
+    const query = new URLSearchParams({ provider: params.provider })
+    if (params.code) {
+      query.set('code', params.code)
+    }
+    if (params.state) {
+      query.set('state', params.state)
+    }
+    if (params.error) {
+      query.set('error', params.error)
+    }
+    return this.managementJson('GET', `/oauth-callback?${query.toString()}`)
+  }
+
   getAliases(): Promise<CpaAliasMap> {
     return this.managementJson<{ 'oauth-model-alias'?: CpaAliasMap }>(
       'GET',

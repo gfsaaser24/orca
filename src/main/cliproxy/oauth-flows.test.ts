@@ -24,6 +24,7 @@ type OauthClient = {
   cancelOauth: ReturnType<
     typeof vi.fn<(state: string) => Promise<{ status: string; cancelled: boolean }>>
   >
+  completeOauthCallback: ReturnType<typeof vi.fn>
 }
 
 function createClient(): OauthClient {
@@ -48,7 +49,8 @@ function createClient(): OauthClient {
           }
     }),
     authStatus: vi.fn(async () => ({ status: 'wait' })),
-    cancelOauth: vi.fn(async () => ({ status: 'ok', cancelled: true }))
+    cancelOauth: vi.fn(async () => ({ status: 'ok', cancelled: true })),
+    completeOauthCallback: vi.fn(async () => ({ status: 'ok' }))
   }
 }
 
@@ -145,5 +147,47 @@ describe('createOauthFlows', () => {
 
     await expect(flows.poll(flow.state)).resolves.toBe('ok')
     await expect(flows.start('kimi')).resolves.toMatchObject({ kind: 'device' })
+  })
+
+  it('captures the browser redirect on loopback and forwards it to CPA', async () => {
+    const client = createClient()
+    const flows = createOauthFlows(client as never)
+    const flow = await flows.start('codex')
+    if (!('kind' in flow)) {
+      throw new Error('expected an OAuth flow')
+    }
+
+    // The provider redirects here; nothing was listening before this change.
+    const response = await fetch(
+      `http://127.0.0.1:1455/auth/callback?code=test-code&state=${flow.state}`
+    )
+    expect(response.status).toBe(200)
+
+    expect(client.completeOauthCallback).toHaveBeenCalledWith({
+      provider: 'codex',
+      code: 'test-code',
+      state: flow.state,
+      error: ''
+    })
+
+    // Cancelling must free the port, or the next login fails its preflight.
+    await flows.cancel(flow.state)
+    const probe = await listen(1455)
+    probe.close()
+  })
+
+  it('does not forward a redirect that carries neither code nor error', async () => {
+    const client = createClient()
+    const flows = createOauthFlows(client as never)
+    const flow = await flows.start('codex')
+    if (!('kind' in flow)) {
+      throw new Error('expected an OAuth flow')
+    }
+
+    const response = await fetch('http://127.0.0.1:1455/favicon.ico')
+    expect(response.status).toBe(204)
+    expect(client.completeOauthCallback).not.toHaveBeenCalled()
+
+    await flows.cancel(flow.state)
   })
 })

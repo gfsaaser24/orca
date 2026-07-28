@@ -6,6 +6,7 @@ import type {
   CpaProviderKind
 } from '../../shared/cliproxy-types'
 import type { CpaAuthProvider, ManagementClient } from './management-client'
+import { startOauthCallbackServer, type OauthCallbackServer } from './oauth-callback-server'
 
 const CALLBACK_PORTS: Partial<Record<CpaProviderKind, number>> = {
   claude: 54545,
@@ -24,6 +25,7 @@ const AUTH_PROVIDERS: Partial<Record<CpaProviderKind, CpaAuthProvider>> = {
 type FlowState = {
   provider: CpaProviderKind
   terminal: CpaOauthStatus | null
+  callback?: OauthCallbackServer
 }
 
 function failure(reason: string, message: string): CpaActionResult {
@@ -65,6 +67,10 @@ export function createOauthFlows(client: ManagementClient): {
       return
     }
     entry.terminal = terminal
+    // Always drop the loopback listener with the flow — leaving it bound would
+    // fail the port preflight on the next login attempt.
+    entry.callback?.close()
+    entry.callback = undefined
     if (activeByProvider.get(entry.provider) === state) {
       activeByProvider.delete(entry.provider)
     }
@@ -119,6 +125,34 @@ export function createOauthFlows(client: ManagementClient): {
             typeof response.expires_in === 'number' && Number.isFinite(response.expires_in)
               ? response.expires_in
               : null
+        }
+      }
+      // Browser flow: the provider redirects to a fixed localhost port that
+      // nothing is listening on (CPA only binds it for is_webui, and on all
+      // interfaces). Capture it here on loopback and hand it back to CPA.
+      if (callbackPort !== undefined) {
+        try {
+          const server = await startOauthCallbackServer(
+            callbackPort,
+            authProvider,
+            (params) => client.completeOauthCallback(params).then(() => undefined),
+            (message) => console.warn(`[cliproxy] ${provider} callback: ${message}`)
+          )
+          const entry = states.get(state)
+          if (entry) {
+            entry.callback = server
+          } else {
+            server.close()
+          }
+        } catch (error) {
+          release(state, 'error')
+          states.delete(state)
+          return failure(
+            'oauth_callback_port_busy',
+            `Could not listen on the ${provider} callback port ${callbackPort}: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          )
         }
       }
       return { kind: 'browser', state, url }
