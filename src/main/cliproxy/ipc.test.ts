@@ -39,6 +39,7 @@ function state(snapshotAt: number): CpaState {
     accounts: [],
     models: [],
     usage: [],
+    claudeDelegated: false,
     snapshotAt
   }
 }

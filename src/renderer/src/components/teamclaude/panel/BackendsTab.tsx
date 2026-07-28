@@ -204,6 +204,7 @@ export function BackendsTab({
             </p>
           </div>
           <ProviderCards
+            claudeDelegated={state?.claudeDelegated ?? false}
             accounts={accounts}
             models={models}
             enabled={gates.managementEnabled}

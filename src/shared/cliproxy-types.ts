@@ -102,6 +102,11 @@ export type CpaState = {
   accounts: CpaAccount[]
   models: CpaModel[]
   usage: CpaUsageAggregate[]
+  /** True when CPA's Claude provider is delegated to the teamclaude fleet
+   * (a generated `claude-api-key` entry pointed at the local proxy) rather than
+   * holding its own Claude auth files. The Claude provider card has no accounts
+   * of its own in that mode, so it must say so instead of reading as empty. */
+  claudeDelegated: boolean
   snapshotAt: number
 }
 

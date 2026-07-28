@@ -1,8 +1,9 @@
-import { randomBytes, randomUUID } from 'node:crypto'
-import { chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { randomBytes } from 'node:crypto'
+import { mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { safeStorage } from 'electron'
 import { parse, stringify } from 'yaml'
+import { atomicWrite } from './atomic-write'
 import {
   expectedManifest,
   isCpaManagementHash,
@@ -49,6 +50,7 @@ export class CpaConfigOwner {
   private readonly storage: CpaSafeStorage
   private readonly warn: (message: string) => void
   private readonly claudeDelegation: () => Promise<CpaClaudeDelegation | null>
+  private lastDelegation: CpaClaudeDelegation | null = null
 
   constructor(options: CpaConfigOwnerOptions) {
     this.directory = path.join(options.userDataPath, CONFIG_DIRECTORY)
@@ -254,17 +256,26 @@ export class CpaConfigOwner {
     }
   }
 
+  /** Whether CPA's Claude provider is currently delegated to the teamclaude
+   * fleet. Recorded by the last resolve (every ensure/inspect does one), so
+   * readers cost nothing — the Claude provider card uses this to explain that
+   * it has no auth files of its own by design. */
+  get claudeDelegated(): boolean {
+    return this.lastDelegation !== null
+  }
+
   /** teamclaude fleet delegation for CPA's Claude provider. A resolver failure
    * degrades to "no delegation" rather than blocking config generation. */
   private async resolveDelegation(): Promise<CpaClaudeDelegation | null> {
     try {
-      return await this.claudeDelegation()
+      this.lastDelegation = await this.claudeDelegation()
     } catch (error) {
       this.warn(
         `teamclaude delegation unavailable: ${error instanceof Error ? error.message : String(error)}`
       )
-      return null
+      this.lastDelegation = null
     }
+    return this.lastDelegation
   }
 
   private async inspectWith(
@@ -329,11 +340,4 @@ export class CpaConfigOwner {
       ...inspection
     }
   }
-}
-
-async function atomicWrite(target: string, value: string | Buffer, mode: number): Promise<void> {
-  const temporary = `${target}.${randomUUID()}.tmp`
-  await writeFile(temporary, value, { mode })
-  await rename(temporary, target)
-  await chmod(target, mode).catch(() => undefined)
 }

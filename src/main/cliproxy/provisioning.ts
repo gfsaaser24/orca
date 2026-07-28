@@ -45,7 +45,7 @@ export class CpaProvisioning {
 
     const upstream = exactLoopbackUpstream(port)
     const result = await this.control.upsertBackendAccount({
-      name: 'cliproxy',
+      id: 'cliproxy',
       type: 'apikey',
       apiKey,
       upstream,

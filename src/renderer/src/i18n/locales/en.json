@@ -13579,6 +13579,7 @@
       "addAntigravity": "Add Antigravity",
       "addAccount": "Add account",
       "empty": "No accounts connected.",
+      "claudeDelegated": "Served by your TeamClaude accounts — no separate login needed.",
       "externalTitle": "API-key providers",
       "apiKey": "API key",
       "openaiCompatible": "OpenAI compatible",

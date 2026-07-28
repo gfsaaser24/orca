@@ -133,6 +133,7 @@ function ProviderCard({
   family,
   accounts,
   enabled,
+  claudeDelegated,
   busyProvider,
   activeFlow,
   controls,
@@ -143,6 +144,7 @@ function ProviderCard({
   family: ProviderFamily
   accounts: CpaAccount[]
   enabled: boolean
+  claudeDelegated: boolean
   busyProvider: CpaProviderKind | null
   activeFlow: ActiveFlow | null
   controls: CliproxyControls
@@ -194,7 +196,15 @@ function ProviderCard({
       </div>
       {accounts.length === 0 ? (
         <p className="py-2 text-xs text-muted-foreground">
-          {t('cliproxy.providers.empty', 'No accounts connected.')}
+          {/* The Claude provider holds no auth files of its own when it is
+              delegated to the fleet — saying "No accounts connected" there read
+              as broken when it was working exactly as designed. */}
+          {family.id === 'claude' && claudeDelegated
+            ? t(
+                'cliproxy.providers.claudeDelegated',
+                'Served by your TeamClaude accounts — no separate login needed.'
+              )
+            : t('cliproxy.providers.empty', 'No accounts connected.')}
         </p>
       ) : (
         accounts.map((account) => (
@@ -247,11 +257,13 @@ export function ProviderCards({
   accounts,
   models,
   enabled,
+  claudeDelegated = false,
   controls
 }: {
   accounts: CpaAccount[]
   models: CpaModel[]
   enabled: boolean
+  claudeDelegated?: boolean
   controls: CliproxyControls
 }): React.JSX.Element {
   const { t } = useTranslation()
@@ -319,6 +331,7 @@ export function ProviderCards({
             family={family}
             accounts={accountsForFamily(accounts, family)}
             enabled={enabled}
+            claudeDelegated={claudeDelegated}
             busyProvider={busyProvider}
             activeFlow={activeFlow}
             controls={controls}

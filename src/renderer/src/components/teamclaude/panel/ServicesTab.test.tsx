@@ -41,6 +41,7 @@ function cpaState(overrides: Partial<CpaState> = {}): CpaState {
     accounts: [],
     models: [],
     usage: [],
+    claudeDelegated: false,
     snapshotAt: 1,
     ...overrides
   }

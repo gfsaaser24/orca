@@ -78,6 +78,7 @@ export async function refreshCpaState(context: CpaRefreshContext): Promise<CpaRe
     accounts: management.authFiles
       ? management.authFiles.map(mapCpaAccount)
       : context.state.accounts,
+    claudeDelegated: context.configOwner.claudeDelegated,
     models: rawModels
       ? mapCpaModels(rawModels, management.aliases, routing.linked)
       : context.state.models.map((model) => ({ ...model, routable: false })),

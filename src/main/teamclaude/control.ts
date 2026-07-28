@@ -20,8 +20,13 @@ export type ControlResult = {
   status?: number
 }
 
+/** POST /teamclaude/account keys on `id`, which dual-accepts a stable account id
+ * OR a name; an unknown id plus {type,apiKey,upstream} creates the account.
+ * It is `id` — NOT `name` — and sending `name` fails with
+ * "id (string) is required". `models-sync` already used `id`; keep both callers
+ * on this type so they cannot drift apart again. */
 export type TeamclaudeBackendAccountUpsert = {
-  name: 'cliproxy'
+  id: 'cliproxy'
   type: 'apikey'
   apiKey: string
   upstream: string

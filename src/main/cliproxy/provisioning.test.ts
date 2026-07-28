@@ -33,8 +33,11 @@ describe('CpaProvisioning', () => {
       reasonKey: null,
       reasonDetail: null
     })
+    // The server keys this endpoint on `id` (dual-accepting a stable id or a
+    // name) and rejects a payload without one: "id (string) is required".
+    // Verified against a live proxy — do not "simplify" this back to `name`.
     expect(upsertBackendAccount).toHaveBeenCalledWith({
-      name: 'cliproxy',
+      id: 'cliproxy',
       type: 'apikey',
       apiKey: 'proxy-key',
       upstream: 'http://127.0.0.1:8319',

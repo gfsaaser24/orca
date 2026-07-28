@@ -50,6 +50,7 @@ function state(overrides: Partial<CpaState> = {}): CpaState {
     accounts: [account()],
     models: [model()],
     usage: [],
+    claudeDelegated: false,
     snapshotAt: 1_000,
     ...overrides
   }
@@ -202,6 +203,19 @@ describe('BackendsTab degradation matrix', () => {
     expect(container.textContent).toContain('Gemini / Antigravity')
     expect(container.textContent).toContain('No accounts connected')
     expect(providerButton('Codex / ChatGPT').disabled).toBe(false)
+  })
+
+  it('explains the delegated Claude card instead of reading as empty', () => {
+    render(state({ accounts: [], models: [], claudeDelegated: true }))
+    const claudeCard = [...container.querySelectorAll('section')].find(
+      (entry) => entry.textContent?.includes('Claude') && !entry.textContent?.includes('Codex')
+    )
+    expect(claudeCard?.textContent).toContain('Served by your TeamClaude accounts')
+    // Other providers still report an honest empty state.
+    const codexCard = [...container.querySelectorAll('section')].find((entry) =>
+      entry.textContent?.includes('Codex / ChatGPT')
+    )
+    expect(codexCard?.textContent).toContain('No accounts connected')
   })
 
   it('gates management and routing independently from model inventory', () => {

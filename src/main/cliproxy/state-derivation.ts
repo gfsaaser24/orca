@@ -50,6 +50,7 @@ export function emptyCpaState(port: number): CpaState {
     accounts: [],
     models: [],
     usage: [],
+    claudeDelegated: false,
     snapshotAt: Date.now()
   }
 }
