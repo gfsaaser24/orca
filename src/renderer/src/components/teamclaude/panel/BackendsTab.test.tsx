@@ -205,6 +205,33 @@ describe('BackendsTab degradation matrix', () => {
     expect(providerButton('Codex / ChatGPT').disabled).toBe(false)
   })
 
+  it('deletes an account through a two-step confirm', async () => {
+    const cpaControls = controls()
+    render(state(), cpaControls)
+    const remove = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Remove Work Codex"]'
+    )
+    if (!remove) {
+      throw new Error('delete button not found')
+    }
+    // First click only arms the confirm — it must not delete outright.
+    await act(async () => {
+      remove.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(cpaControls.accountDelete).not.toHaveBeenCalled()
+
+    const confirm = [...container.querySelectorAll('button')].find(
+      (entry) => entry.textContent === 'Delete'
+    )
+    if (!confirm) {
+      throw new Error('confirm button not found')
+    }
+    await act(async () => {
+      confirm.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(cpaControls.accountDelete).toHaveBeenCalledWith({ name: 'codex.json' })
+  })
+
   it('explains the delegated Claude card instead of reading as empty', () => {
     render(state({ accounts: [], models: [], claudeDelegated: true }))
     const claudeCard = [...container.querySelectorAll('section')].find(

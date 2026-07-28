@@ -13567,7 +13567,10 @@
       "recentAccounting": "{{value0}} success · {{value1}} failed",
       "priority": "Priority",
       "enabledAria": "Enable {{value0}}",
-      "enabled": "Enabled"
+      "enabled": "Enabled",
+      "confirmDelete": "Delete",
+      "cancelDelete": "Cancel",
+      "deleteAria": "Remove {{value0}}"
     },
     "providers": {
       "geminiFamily": "Gemini / Antigravity",

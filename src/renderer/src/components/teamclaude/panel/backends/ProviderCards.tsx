@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { Loader2, Plus } from 'lucide-react'
+import { Loader2, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -47,6 +47,7 @@ function AccountRow({
   onResult: (result: CpaActionResult) => void
 }): React.JSX.Element {
   const { t } = useTranslation()
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const status =
     account.disabled || account.unavailable ? 'offline' : account.cooling ? 'cooling' : 'ready'
   const statusLabel =
@@ -124,6 +125,47 @@ function AccountRow({
           />
           {t('cliproxy.accounts.enabled', 'Enabled')}
         </label>
+        {/* Two-step confirm rather than a modal: deleting an auth file is
+            irreversible (it means re-running the provider login), but a repeated
+            login leaves duplicates that must be removable in place. */}
+        {confirmingDelete ? (
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="destructive"
+              size="xs"
+              disabled={!enabled}
+              onClick={() => {
+                setConfirmingDelete(false)
+                void controls.accountDelete({ name: account.name }).then(onResult)
+              }}
+            >
+              {t('cliproxy.accounts.confirmDelete', 'Delete')}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={() => setConfirmingDelete(false)}
+            >
+              {t('cliproxy.accounts.cancelDelete', 'Cancel')}
+            </Button>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="shrink-0 text-muted-foreground hover:text-destructive"
+            disabled={!enabled}
+            aria-label={t('cliproxy.accounts.deleteAria', 'Remove {{value0}}', {
+              value0: account.label
+            })}
+            onClick={() => setConfirmingDelete(true)}
+          >
+            <Trash2 />
+          </Button>
+        )}
       </div>
     </div>
   )
