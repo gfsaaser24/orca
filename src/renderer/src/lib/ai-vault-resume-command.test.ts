@@ -85,7 +85,9 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe("Set-Location -LiteralPath 'C:\\Users\\alice\\repo'; claude '--resume' 'session one'")
+    ).toBe(
+      "Set-Location -LiteralPath 'C:\\Users\\alice\\repo'; teamclaude run -- '--resume' 'session one'"
+    )
   })
 
   it('queues direct cmd syntax when the configured Windows shell is cmd.exe', () => {
@@ -105,7 +107,7 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe('cd /d "C:\\Users\\alice\\repo" && claude "--resume" "session one"')
+    ).toBe('cd /d "C:\\Users\\alice\\repo" && teamclaude run -- "--resume" "session one"')
   })
 
   it('queues a POSIX command for the Git Bash Windows shell', () => {
@@ -125,7 +127,7 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe("cd 'C:\\Users\\alice\\repo' && claude '--resume' 'session one'")
+    ).toBe("cd 'C:\\Users\\alice\\repo' && teamclaude run -- '--resume' 'session one'")
   })
 
   it('follows the live Windows shell for non-resumable agents in the fallback path', () => {
@@ -212,7 +214,7 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe('cd /d "C:\\Users\\alice\\repo" && claude "--resume" "session one"')
+    ).toBe('cd /d "C:\\Users\\alice\\repo" && teamclaude run -- "--resume" "session one"')
   })
 
   it('copies syntax that matches the configured PowerShell shell', () => {
@@ -229,7 +231,9 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe("Set-Location -LiteralPath 'C:\\Users\\alice\\repo'; claude '--resume' 'session one'")
+    ).toBe(
+      "Set-Location -LiteralPath 'C:\\Users\\alice\\repo'; teamclaude run -- '--resume' 'session one'"
+    )
   })
 
   it('uses configured agent defaults for resumable session history entries', () => {

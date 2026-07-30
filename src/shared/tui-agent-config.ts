@@ -27,6 +27,9 @@ export type TuiAgentConfig = {
   launchCmd: string
   /** Platform-specific launch command when the public binary name differs. */
   launchCmdByPlatform?: Partial<Record<NodeJS.Platform, string>>
+  /** Why: launch command for SSH/relay remotes when the local command wraps a
+   * helper binary (e.g. teamclaude) that is not deployed to remote hosts. */
+  remoteLaunchCmd?: string
   expectedProcess: string
   promptInjectionMode: AgentPromptInjectionMode
   /** Option terminator required before positional prompts that may look like CLI syntax. */
@@ -72,7 +75,18 @@ export type TuiAgentConfig = {
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
   claude: {
     detectCmd: 'claude',
+    // Why: Orca PTYs set TEAMCLAUDE_RUN_GUARD=1, which makes the bare-`claude`
+    // shim bypass the TeamClaude proxy — so native local launches invoke the
+    // fleet CLI explicitly (`teamclaude run -- <claude args>`). The 'linux'
+    // platform stays bare `claude`: it covers WSL and SSH hosts, where the
+    // Windows-side teamclaude npm global is not on PATH (those launches are
+    // still proxied by routing-env when the fleet is up).
     launchCmd: 'claude',
+    launchCmdByPlatform: {
+      darwin: 'teamclaude run --',
+      win32: 'teamclaude run --'
+    },
+    remoteLaunchCmd: 'claude',
     expectedProcess: 'claude',
     promptInjectionMode: 'argv',
     // Why: `claude --prefill <text>` lands the TUI with `<text>` in the
@@ -390,6 +404,9 @@ export function getTuiAgentLaunchCommand(
   platform: NodeJS.Platform,
   opts?: { isRemote?: boolean }
 ): string {
+  if (opts?.isRemote && config.remoteLaunchCmd) {
+    return config.remoteLaunchCmd
+  }
   // Why: the SSH relay shim is always named `orca` on Unix, so the local-only
   // `orca-ide` rename (avoids shadowing the GNOME Orca screen reader) must not
   // leak to Linux remotes — the remote has no such desktop binary on PATH.

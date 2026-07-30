@@ -23,10 +23,10 @@ describe('buildAgentStartupPlan', () => {
       })
     ).toEqual({
       agent: 'claude',
-      launchCommand: "claude 'Fix the bug'",
+      launchCommand: "teamclaude run -- 'Fix the bug'",
       expectedProcess: 'claude',
       followupPrompt: null,
-      launchConfig: emptyLaunchConfig('claude')
+      launchConfig: emptyLaunchConfig('teamclaude run --')
     })
   })
 
@@ -262,9 +262,9 @@ describe('buildAgentDraftLaunchPlan', () => {
       })
     ).toEqual({
       agent: 'claude',
-      launchCommand: "claude --prefill 'https://github.com/acme/repo/issues/42'",
+      launchCommand: "teamclaude run -- --prefill 'https://github.com/acme/repo/issues/42'",
       expectedProcess: 'claude',
-      launchConfig: emptyLaunchConfig('claude')
+      launchConfig: emptyLaunchConfig('teamclaude run --')
     })
   })
 

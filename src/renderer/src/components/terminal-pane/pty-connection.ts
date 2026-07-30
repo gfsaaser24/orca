@@ -4432,7 +4432,10 @@ export function connectPanePty(
             ? launchConfig.agentEnv
             : resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
         ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
-        platform: resumePlatform
+        platform: resumePlatform,
+        // Why: remote hosts lack local-only launch wrappers (e.g. teamclaude),
+        // so the resume plan must resolve the remote launch command.
+        isRemote: Boolean(connectionId)
       })
       if (!startupPlan) {
         return null

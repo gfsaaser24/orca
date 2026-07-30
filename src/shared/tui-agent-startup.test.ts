@@ -58,7 +58,7 @@ describe('tui agent startup plans', () => {
       platform: 'win32'
     })
 
-    expect(plan?.launchCommand).toBe("claude 'fix Bob''s \"quoted\" branch'")
+    expect(plan?.launchCommand).toBe("teamclaude run -- 'fix Bob''s \"quoted\" branch'")
   })
 
   it('invokes fully quoted argv commands in PowerShell', () => {
@@ -76,7 +76,7 @@ describe('tui agent startup plans', () => {
       shell: 'cmd'
     })
 
-    expect(plan?.launchCommand).toBe('claude "fix ^"quoted^" ^& ^%PATH^%"')
+    expect(plan?.launchCommand).toBe('teamclaude run -- "fix ^"quoted^" ^& ^%PATH^%"')
   })
 
   it('terminates Grok options before a flag-shaped POSIX prompt', () => {
@@ -644,7 +644,9 @@ describe('tui agent startup plans', () => {
       platform: 'win32'
     })
 
-    expect(plan?.launchCommand).toBe("claude '--model' 'sonnet' '--name' 'Bob''s' 'fix it'")
+    expect(plan?.launchCommand).toBe(
+      "teamclaude run -- '--model' 'sonnet' '--name' 'Bob''s' 'fix it'"
+    )
   })
 
   it('carries agent launch environment defaults into startup plans', () => {

@@ -166,6 +166,27 @@ function tmuxSpecialKeyText(token: string): string | null {
   }
 }
 
+type CommandToken = {
+  text: string
+  end: number
+}
+
+function tokenizeCommand(command: string): CommandToken[] {
+  const tokens: CommandToken[] = []
+  const pattern = /\S+/g
+  let match = pattern.exec(command)
+  while (match) {
+    tokens.push({ text: match[0], end: match.index + match[0].length })
+    match = pattern.exec(command)
+  }
+  return tokens
+}
+
+function isTeamclaudeRunPrefix(tokens: CommandToken[]): boolean {
+  const first = tokens[0]?.text ?? ''
+  return (first === 'teamclaude' || first.endsWith('/teamclaude')) && tokens[1]?.text === 'run'
+}
+
 export function isDirectClaudeCommand(command: string | undefined): boolean {
   const trimmed = command?.trim() ?? ''
   if (!trimmed) {
@@ -174,20 +195,36 @@ export function isDirectClaudeCommand(command: string | undefined): boolean {
   if (/[;&|<>`]/.test(trimmed)) {
     return false
   }
-  const first = trimmed.match(/^\S+/)?.[0] ?? ''
-  return first === 'claude' || first.endsWith('/claude')
+  const tokens = tokenizeCommand(trimmed)
+  const first = tokens[0]?.text ?? ''
+  if (first === 'claude' || first.endsWith('/claude')) {
+    return true
+  }
+  // Why: local Claude launches go through the fleet CLI as `teamclaude run -- <claude argv>`.
+  return isTeamclaudeRunPrefix(tokens)
+}
+
+// Why: everything after the `teamclaude run` argv separator belongs to claude, so teammate-mode
+// must land there — before the separator it would be parsed as a teamclaude flag.
+function addClaudeTeammateModeFlag(command: string, flag: string): string {
+  if (/(^|\s)--teammate-mode(?:\s|=|$)/.test(command)) {
+    return command
+  }
+  const tokens = tokenizeCommand(command)
+  if (!isTeamclaudeRunPrefix(tokens)) {
+    return command.replace(/^(\S+)/, `$1 ${flag}`)
+  }
+  const separator = tokens.slice(2).find((token) => token.text === '--')
+  if (!separator) {
+    return `${command.trimEnd()} -- ${flag}`
+  }
+  return `${command.slice(0, separator.end)} ${flag}${command.slice(separator.end)}`
 }
 
 export function addClaudeTeammateModeAuto(command: string): string {
-  if (/(^|\s)--teammate-mode(?:\s|=|$)/.test(command)) {
-    return command
-  }
-  return command.replace(/^(\S+)/, '$1 --teammate-mode auto')
+  return addClaudeTeammateModeFlag(command, '--teammate-mode auto')
 }
 
 export function addClaudeTeammateModeInProcess(command: string): string {
-  if (/(^|\s)--teammate-mode(?:\s|=|$)/.test(command)) {
-    return command
-  }
-  return command.replace(/^(\S+)/, '$1 --teammate-mode in-process')
+  return addClaudeTeammateModeFlag(command, '--teammate-mode in-process')
 }

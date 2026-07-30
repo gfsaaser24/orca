@@ -28,6 +28,7 @@ vi.mock('../teamclaude/init', () => ({
 }))
 
 import {
+  isClaudeLaunchCommand,
   isTeamclaudeClaudeFamilyLaunch,
   applyTeamclaudeSeamRouting,
   willTeamclaudeFleetRoute
@@ -71,6 +72,40 @@ describe('isTeamclaudeClaudeFamilyLaunch (spec §4 predicate)', () => {
     expect(isTeamclaudeClaudeFamilyLaunch(undefined, 'bash')).toBe(false)
     // A non-TuiAgent string is not claude-family; falls back to command (none).
     expect(isTeamclaudeClaudeFamilyLaunch('not-an-agent', 'ls')).toBe(false)
+  })
+})
+
+describe('isClaudeLaunchCommand (claude-auth gate)', () => {
+  it('detects the fleet-CLI wrapper used by local claude launches', () => {
+    expect(isClaudeLaunchCommand('teamclaude run -- --dangerously-skip-permissions')).toBe(true)
+    expect(isClaudeLaunchCommand('teamclaude run -- --resume abc')).toBe(true)
+    expect(isClaudeLaunchCommand('teamclaude run --no-mitm -- --resume abc')).toBe(true)
+    expect(isClaudeLaunchCommand('teamclaude.cmd run --')).toBe(true)
+    expect(isClaudeLaunchCommand('C:\\bin\\teamclaude.exe run --')).toBe(true)
+    expect(isClaudeLaunchCommand('teamclaude run')).toBe(true)
+  })
+
+  it('still detects a bare / path-qualified claude command', () => {
+    expect(isClaudeLaunchCommand('claude')).toBe(true)
+    expect(isClaudeLaunchCommand('claude --resume')).toBe(true)
+    expect(isClaudeLaunchCommand('/usr/local/bin/claude')).toBe(true)
+  })
+
+  it('treats `--exec <non-claude>` as not a claude launch', () => {
+    expect(isClaudeLaunchCommand('teamclaude run --exec openclaude --')).toBe(false)
+    expect(isClaudeLaunchCommand('teamclaude run --exec "/usr/bin/codex"')).toBe(false)
+    expect(isClaudeLaunchCommand('teamclaude run --exec claude -- --resume abc')).toBe(true)
+  })
+
+  it('does not detect other agents or incidental mentions', () => {
+    expect(isClaudeLaunchCommand(undefined)).toBe(false)
+    expect(isClaudeLaunchCommand('openclaude')).toBe(false)
+    expect(isClaudeLaunchCommand('openclaude --prefill hi')).toBe(false)
+    expect(isClaudeLaunchCommand('orca claude-teams')).toBe(false)
+    expect(isClaudeLaunchCommand('codex')).toBe(false)
+    // teamclaude must lead the command AND be followed by `run`.
+    expect(isClaudeLaunchCommand('echo teamclaude')).toBe(false)
+    expect(isClaudeLaunchCommand('teamclaude status')).toBe(false)
   })
 })
 

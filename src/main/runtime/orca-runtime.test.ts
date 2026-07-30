@@ -10084,7 +10084,7 @@ describe('OrcaRuntimeService', () => {
     })
 
     const spawnCall = spawn.mock.calls[0]?.[0] as { command?: string } | undefined
-    expect(spawnCall?.command).toBe('claude "--dangerously-skip-permissions"')
+    expect(spawnCall?.command).toBe('teamclaude run -- "--dangerously-skip-permissions"')
   })
 
   it('does not use the local Windows shell setting for remote Windows bare agent creates', async () => {

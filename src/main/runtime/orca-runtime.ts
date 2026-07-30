@@ -1117,7 +1117,13 @@ function resolveBareAgentLaunchCommand(args: {
     const defaultLaunchCommand = getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[agent], args.platform, {
       isRemote: args.isRemote
     })
-    const launchCommands = override ? [defaultLaunchCommand, override] : [defaultLaunchCommand]
+    // Why: a bare create may use the agent's plain binary name even when the
+    // resolved local launch wraps it (e.g. claude → `teamclaude run --`).
+    const launchCommands = [
+      defaultLaunchCommand,
+      TUI_AGENT_CONFIG[agent].launchCmd,
+      ...(override ? [override] : [])
+    ]
     if (
       launchCommands.some((candidate) => command === normalizeAgentLaunchCommandForMatch(candidate))
     ) {

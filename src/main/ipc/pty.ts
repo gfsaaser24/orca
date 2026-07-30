@@ -1075,9 +1075,35 @@ export function buildPtyHostEnv(
   return baseEnv
 }
 
-function isClaudeLaunchCommand(command: string | undefined): boolean {
+// A command whose FIRST token is the fleet CLI followed by the `run` subcommand,
+// i.e. `teamclaude run -- <claude args>` (optionally path-qualified / .cmd/.exe).
+const TEAMCLAUDE_RUN_PREFIX =
+  /^\s*(?:[^\s;&|('"`]*[\\/])?teamclaude(?:\.cmd|\.exe)?\s+run(?:$|[\s;&|)'"`])/i
+const TEAMCLAUDE_RUN_EXEC_TARGET = /(?:^|\s)--exec[\s=]+("[^"]*"|'[^']*'|\S+)/i
+const CLAUDE_EXECUTABLE_PATH = /(?:^|[\\/])claude(?:\.cmd|\.exe)?$/i
+
+// Why: local claude launches are wrapped as `teamclaude run -- …`
+// (src/shared/tui-agent-config.ts), which the bare-`claude` regex below cannot
+// see — `teamclaude run` always ends in claude unless `--exec` names another binary.
+function isTeamclaudeRunClaudeLaunch(command: string): boolean {
+  if (!TEAMCLAUDE_RUN_PREFIX.test(command)) {
+    return false
+  }
+  // Only teamclaude's own flags matter; everything after the `--` terminator is claude's.
+  const teamclaudeArgs = command.split(/\s--(?=\s|$)/)[0]
+  const execTarget = TEAMCLAUDE_RUN_EXEC_TARGET.exec(teamclaudeArgs)
+  if (!execTarget) {
+    return true
+  }
+  return CLAUDE_EXECUTABLE_PATH.test(execTarget[1].replace(/^["']|["']$/g, ''))
+}
+
+export function isClaudeLaunchCommand(command: string | undefined): boolean {
   if (!command) {
     return false
+  }
+  if (isTeamclaudeRunClaudeLaunch(command)) {
+    return true
   }
   return /(^|[\s;&|('"`])(?:[^\s;&|('"`]*[\\/])?claude(?:\.cmd|\.exe)?($|[\s;&|)'"`])/i.test(
     command

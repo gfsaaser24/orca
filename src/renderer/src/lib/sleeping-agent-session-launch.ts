@@ -25,21 +25,30 @@ export type ResumeSleepingAgentSessionsOptions = {
   onSessionLaunched?: (tabId: string) => void
 }
 
-function getResumeLaunchPlatform(worktreeId: string): NodeJS.Platform {
+function getResumeLaunchTarget(worktreeId: string): {
+  platform: NodeJS.Platform
+  isRemote: boolean
+} {
   const state = useAppStore.getState()
   const worktree = state.getKnownWorktreeById(worktreeId)
   const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
+  // Why: remote hosts lack local-only launch wrappers (e.g. teamclaude), so
+  // the resume plan must resolve the remote launch command for SSH repos.
+  const isRemote = Boolean(repo?.connectionId)
   const projectRuntime = getLocalProjectExecutionRuntimeContext(state, worktreeId)
   if (projectRuntime?.status === 'repair-required') {
-    return projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : CLIENT_PLATFORM
+    return {
+      platform: projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : CLIENT_PLATFORM,
+      isRemote
+    }
   }
   if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
-    return 'linux'
+    return { platform: 'linux', isRemote }
   }
   if (repo?.connectionId || (worktree?.path && isWslUncPath(worktree.path))) {
-    return 'linux'
+    return { platform: 'linux', isRemote }
   }
-  return CLIENT_PLATFORM
+  return { platform: CLIENT_PLATFORM, isRemote }
 }
 
 function appendTabToWorktreeOrder(worktreeId: string, tabId: string): void {
@@ -81,7 +90,7 @@ export function launchSleepingAgentSession(
         ? launchConfig.agentEnv
         : resolveTuiAgentLaunchEnv(record.agent, state.settings?.agentDefaultEnv),
     ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
-    platform: getResumeLaunchPlatform(record.worktreeId)
+    ...getResumeLaunchTarget(record.worktreeId)
   })
   if (!startupPlan) {
     toast.error(

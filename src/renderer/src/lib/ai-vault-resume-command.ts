@@ -99,6 +99,9 @@ function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVault
       },
       platform,
       shell: liveShell,
+      // Why: remote hosts lack local-only launch wrappers (e.g. teamclaude),
+      // so remote-session rebuilds must use the agent's remote launch command.
+      isRemote: !isLocalSession,
       agentArgs: resolveTuiAgentLaunchArgs(
         args.session.agent,
         args.state.settings?.agentDefaultArgs

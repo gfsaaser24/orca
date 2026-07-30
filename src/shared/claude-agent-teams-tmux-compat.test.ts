@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   addClaudeTeammateModeAuto,
+  addClaudeTeammateModeInProcess,
   isDirectClaudeCommand,
   parseTmuxArgs,
   renderTmuxFormat,
@@ -58,6 +59,34 @@ describe('claude agent teams tmux compat primitives', () => {
     )
     expect(addClaudeTeammateModeAuto('claude --teammate-mode in-process')).toBe(
       'claude --teammate-mode in-process'
+    )
+    expect(isDirectClaudeCommand('/usr/local/bin/claude --resume')).toBe(true)
+    expect(addClaudeTeammateModeAuto('/usr/local/bin/claude --resume')).toBe(
+      '/usr/local/bin/claude --teammate-mode auto --resume'
+    )
+    expect(isDirectClaudeCommand('codex --full-auto')).toBe(false)
+  })
+
+  it('rewrites fleet-wrapped Claude launches after the argv separator', () => {
+    expect(isDirectClaudeCommand('teamclaude run -- --dangerously-skip-permissions')).toBe(true)
+    expect(isDirectClaudeCommand('teamclaude run --')).toBe(true)
+    expect(isDirectClaudeCommand('teamclaude status')).toBe(false)
+    expect(isDirectClaudeCommand('teamclaude')).toBe(false)
+
+    expect(addClaudeTeammateModeAuto('teamclaude run -- --dangerously-skip-permissions')).toBe(
+      'teamclaude run -- --teammate-mode auto --dangerously-skip-permissions'
+    )
+    expect(addClaudeTeammateModeInProcess('teamclaude run -- --dangerously-skip-permissions')).toBe(
+      'teamclaude run -- --teammate-mode in-process --dangerously-skip-permissions'
+    )
+    expect(addClaudeTeammateModeAuto('teamclaude run --')).toBe(
+      'teamclaude run -- --teammate-mode auto'
+    )
+    expect(addClaudeTeammateModeAuto('teamclaude run')).toBe(
+      'teamclaude run -- --teammate-mode auto'
+    )
+    expect(addClaudeTeammateModeAuto('teamclaude run -- --teammate-mode auto --resume')).toBe(
+      'teamclaude run -- --teammate-mode auto --resume'
     )
   })
 })

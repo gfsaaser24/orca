@@ -91,7 +91,7 @@ function ModelRow({
 }): React.JSX.Element {
   const { t } = useTranslation()
   const copyCommand = async (): Promise<void> => {
-    await navigator.clipboard.writeText(`claude --model ${model.id}`)
+    await navigator.clipboard.writeText(`teamclaude run -- --model ${model.id}`)
     toast.success(t('cliproxy.models.commandCopied', 'Launch command copied'))
   }
   return (

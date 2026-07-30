@@ -485,7 +485,8 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: "claude '--dangerously-skip-permissions' --prefill 'review Bob''s change'"
+        command:
+          "teamclaude run -- '--dangerously-skip-permissions' --prefill 'review Bob''s change'"
       })
     )
   })
@@ -503,7 +504,7 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: 'claude "--dangerously-skip-permissions"'
+        command: 'teamclaude run -- "--dangerously-skip-permissions"'
       })
     )
   })
@@ -521,7 +522,7 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: "claude '--dangerously-skip-permissions'"
+        command: "teamclaude run -- '--dangerously-skip-permissions'"
       })
     )
   })
@@ -561,7 +562,8 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: "claude '--dangerously-skip-permissions' --prefill 'review Bob'\\''s change'"
+        command:
+          "teamclaude run -- '--dangerously-skip-permissions' --prefill 'review Bob'\\''s change'"
       })
     )
   })
@@ -637,7 +639,7 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: "claude '--dangerously-skip-permissions'"
+        command: "teamclaude run -- '--dangerously-skip-permissions'"
       })
     )
     expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(

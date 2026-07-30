@@ -47,7 +47,10 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
   {
     id: 'claude',
     label: translate('auto.lib.agent.catalog.0708ed89f1', 'Claude'),
-    cmd: 'claude',
+    // Why: local launches go through the fleet CLI wrapper, so the onboarding
+    // and settings hints must show the command Orca actually runs. `claude`
+    // stays searchable/aliasable via the entry's id and label.
+    cmd: getTuiAgentLaunchCommand(TUI_AGENT_CONFIG.claude, getCatalogPlatform()),
     homepageUrl: 'https://docs.anthropic.com/claude/docs/claude-code'
   },
   {
