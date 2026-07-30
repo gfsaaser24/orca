@@ -7,6 +7,7 @@ import { TeamclaudeClient, deriveReadiness, type TcStatusSnapshot } from './clie
 import type { TcNativeAccountIdentity } from './client-mapping'
 import { TeamclaudeControl } from './control'
 import { TeamclaudeIpc } from './ipc'
+import { createEffortHandlers } from './effort-handlers'
 import { applyRouting, type RoutingKind, type RoutingSnapshot } from './routing-env'
 import type { TcAccount, TcProxyStartResult, TcState } from '../../shared/teamclaude-types'
 import { getProxyStartBlocker, getProxyStartCompletion } from './proxy-start-result'
@@ -85,7 +86,8 @@ class TeamclaudeService {
           reasonDetail: `stopped by user (acknowledged ${confirmed} live session${confirmed === 1 ? '' : 's'})`
         })
       },
-      logTail: () => this.client?.seedActivity() ?? Promise.resolve([])
+      logTail: () => this.client?.seedActivity() ?? Promise.resolve([]),
+      ...createEffortHandlers(() => this.control)
     })
   }
 

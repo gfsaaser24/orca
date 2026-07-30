@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Settings2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -11,6 +11,8 @@ import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-co
 import { useAppStore, type AppState } from '@/store'
 import { OPEN_TEAMCLAUDE_COCKPIT_EVENT } from './teamclaude-cockpit-event'
 import { TeamclaudeFlyout } from './TeamclaudeFlyout'
+import { hotSwapModelInventory } from './teamclaude-hotswap'
+import { useTeamclaudeHotSwapTarget } from './teamclaude-hotswap-target'
 import { TeamclaudePanel } from './TeamclaudePanel'
 
 function isLocalLaunchContext(state: AppState): boolean {
@@ -41,6 +43,21 @@ export function TeamclaudeCockpit(): React.JSX.Element | null {
   const updateSettings = useAppStore((s) => s.updateSettings)
   const [flyoutOpen, setFlyoutOpen] = useState(false)
   const [panelOpen, setPanelOpen] = useState(false)
+  // Why: the hot-swap picker needs live data from both services plus the pane it
+  // would type into. The cockpit already owns both hooks, so resolve it here and
+  // hand the flyout plain data.
+  const hotSwapTarget = useTeamclaudeHotSwapTarget()
+  const cpaModels = cpaState?.models
+  const hotSwap = useMemo(
+    () => ({
+      models: hotSwapModelInventory({
+        cpaModels,
+        activityModels: activity.map((row) => row.model)
+      }),
+      target: hotSwapTarget
+    }),
+    [activity, cpaModels, hotSwapTarget]
+  )
 
   useEffect(() => {
     const openPanel = (): void => {
@@ -74,6 +91,7 @@ export function TeamclaudeCockpit(): React.JSX.Element | null {
           <TeamclaudeFlyout
             state={state}
             controls={controls}
+            hotSwap={hotSwap}
             onOpenPanel={() => {
               setFlyoutOpen(false)
               setPanelOpen(true)

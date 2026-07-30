@@ -12,6 +12,8 @@ import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type {
   TcAccountSetPayload,
   TcActivityRow,
+  TcEffortLevel,
+  TcEffortState,
   TcProxyStartResult,
   TcRoute,
   TcState
@@ -31,6 +33,9 @@ export type TeamclaudeApi = {
   startProxy: () => Promise<TcProxyStartResult>
   stopProxy: (args: { confirmLiveSessions: number }) => Promise<void>
   logTail: () => Promise<TcActivityRow[]>
+  /** Reasoning-effort override held by the proxy; null = no override. */
+  getEffort: () => Promise<TcEffortState>
+  setEffort: (level: TcEffortLevel | null) => Promise<TcEffortState>
 }
 
 export type CliproxyApi = CpaBridge

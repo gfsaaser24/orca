@@ -16,11 +16,14 @@ import {
   TC_IPC,
   type TcAccountSetPayload,
   type TcActivityRow,
+  type TcEffortLevel,
   type TcProxyStartResult,
   type TcRoute,
   type TcState
 } from '../../shared/teamclaude-types'
+import { TC_EFFORT_IPC } from '../../shared/teamclaude-effort-ipc'
 import type { ControlResult } from './control'
+import type { EffortHandlers } from './effort-handlers'
 
 export type TeamclaudeIpcHandlers = {
   getState(): Promise<TcState> | TcState
@@ -30,7 +33,7 @@ export type TeamclaudeIpcHandlers = {
   proxyStart(): Promise<TcProxyStartResult>
   proxyStop(args: { confirmLiveSessions: number }): Promise<void>
   logTail(): Promise<TcActivityRow[]>
-}
+} & EffortHandlers
 
 const MIN_PUSH_INTERVAL_MS = 100 // ≤10 Hz
 
@@ -56,6 +59,11 @@ export class TeamclaudeIpc {
       handlers.proxyStop(args)
     )
     this.register(TC_IPC.logTail, () => handlers.logTail())
+    // Effort channels live in TC_EFFORT_IPC (additive to the frozen TC_IPC map).
+    this.register(TC_EFFORT_IPC.get, () => handlers.getEffort())
+    this.register(TC_EFFORT_IPC.set, (_e, level: TcEffortLevel | null) =>
+      handlers.setEffort(level ?? null)
+    )
   }
 
   private register(

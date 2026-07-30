@@ -127,6 +127,16 @@ export type TcProxyStartResult =
       message: string
     }
 
+/**
+ * Reasoning-effort levels the proxy will inject. `none` and `minimal` are valid
+ * only on the CLIProxyAPI backends — Anthropic rejects both with a 400, so the
+ * proxy skips injection rather than forwarding them to a claude-* model.
+ */
+export type TcEffortLevel = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+
+/** Effort override currently held by the proxy; null means "no override". */
+export type TcEffortState = { level: TcEffortLevel } | null
+
 /** Shape of the preload bridge exposed at window.api.teamclaude. */
 export type TcBridge = {
   onState(cb: (state: TcState) => void): () => void
@@ -138,4 +148,8 @@ export type TcBridge = {
   startProxy(): Promise<TcProxyStartResult>
   stopProxy(payload: { confirmLiveSessions: number }): Promise<void>
   logTail(): Promise<TcActivityRow[]>
+  /** Read the proxy's current effort override. */
+  getEffort(): Promise<TcEffortState>
+  /** Set or clear (null) the proxy's effort override. */
+  setEffort(level: TcEffortLevel | null): Promise<TcEffortState>
 }

@@ -1,16 +1,23 @@
 /**
- * TeamClaude control plane — pin / routes / account mutations. Spec §4
+ * TeamClaude control plane — pin / routes / account / effort mutations. Spec §4
  * (control.ts) + §3 (Phase-0 mutation endpoints). NO config-file writes: every
  * mutation flows through the single server process (the lone writer), which
  * applies disk + runtime state atomically before returning 200 (spec §3.5c).
  *
  * `x-api-key` is REQUIRED on mutating endpoints even from loopback (§3.5c), so
- * we always send it. All methods resolve to a typed `ControlResult` and never
- * throw — a down/slow proxy or a non-2xx body becomes `{ ok: false, error }` so
- * IPC handlers never reject and the UI can simply re-read status.
+ * every mutation sends it. The one read that lives here — GET /teamclaude/effort
+ * — is unauthenticated by contract and must NOT send it. All methods resolve to
+ * a typed result and never throw: a down/slow proxy or a non-2xx body becomes
+ * `{ ok: false, error }` so IPC handlers never reject and the UI can simply
+ * re-read state.
  */
 import http from 'node:http'
-import type { TcAccountSetPayload, TcRoute } from '../../shared/teamclaude-types'
+import type {
+  TcAccountSetPayload,
+  TcEffortLevel,
+  TcEffortState,
+  TcRoute
+} from '../../shared/teamclaude-types'
 
 export type ControlResult = {
   ok: boolean
@@ -18,6 +25,36 @@ export type ControlResult = {
   error?: string
   /** HTTP status when a response was received. */
   status?: number
+}
+
+/** Result of an effort read/write. `ok: true` carries the proxy's post-call
+ *  state, where `null` legitimately means "no override". */
+export type EffortResult = { ok: true; effort: TcEffortState } | { ok: false; error: string }
+
+const EFFORT_PATH = '/teamclaude/effort'
+const EFFORT_LEVELS: ReadonlySet<string> = new Set<TcEffortLevel>([
+  'none',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max'
+])
+
+type RawResponse = {
+  status?: number
+  status2xx: boolean
+  json: Record<string, unknown> | null
+  error?: string
+}
+
+type RawRequest = {
+  method: 'GET' | 'POST'
+  path: string
+  body?: unknown
+  /** Mutations REQUIRE `x-api-key` even from loopback (§3.5c); plain reads must
+   *  NOT send it — GET /teamclaude/effort is unauthenticated by contract. */
+  sendApiKey: boolean
 }
 
 /** POST /teamclaude/account keys on `id`, which dual-accepts a stable account id
@@ -77,6 +114,22 @@ export class TeamclaudeControl {
     return this.post('/teamclaude/oauth/login')
   }
 
+  /** Read the proxy's current effort override. Deliberately UNAUTHENTICATED —
+   *  the contract exposes GET /teamclaude/effort without `x-api-key`. */
+  getEffort(): Promise<EffortResult> {
+    return this.effortRequest({ method: 'GET', path: EFFORT_PATH, sendApiKey: false })
+  }
+
+  /** Set the effort override, or clear it with `null`. Authenticated mutation. */
+  setEffort(level: TcEffortLevel | null): Promise<EffortResult> {
+    return this.effortRequest({
+      method: 'POST',
+      path: EFFORT_PATH,
+      body: { level },
+      sendApiKey: true
+    })
+  }
+
   /** Ensure MITM certs exist for the upstream and return the CA path (spec §3.3).
    *  A SINGLE POST — cert generation is a real side effect (shared CONNECT cert
    *  lock); issuing it twice raced the generation and doubled the work (D4). */
@@ -111,15 +164,27 @@ export class TeamclaudeControl {
     return { ok: false, error, ...(raw.status ? { status: raw.status } : {}) }
   }
 
-  private postRaw(
-    path: string,
-    body?: unknown
-  ): Promise<{
-    status?: number
-    status2xx: boolean
-    json: Record<string, unknown> | null
-    error?: string
-  }> {
+  private async effortRequest(request: RawRequest): Promise<EffortResult> {
+    const raw = await this.requestRaw(request)
+    if (raw.error) {
+      return { ok: false, error: raw.error }
+    }
+    const ok = raw.json && typeof raw.json.ok === 'boolean' ? raw.json.ok : raw.status2xx
+    if (!ok) {
+      const error =
+        (raw.json && typeof raw.json.error === 'string' && raw.json.error) ||
+        `Proxy ${request.path} responded ${raw.status ?? '(no status)'}`
+      return { ok: false, error }
+    }
+    return { ok: true, effort: parseEffortState(raw.json) }
+  }
+
+  private postRaw(path: string, body?: unknown): Promise<RawResponse> {
+    return this.requestRaw({ method: 'POST', path, body, sendApiKey: true })
+  }
+
+  private requestRaw(request: RawRequest): Promise<RawResponse> {
+    const { method, path, body, sendApiKey } = request
     return new Promise((resolve) => {
       const payload = body === undefined ? undefined : Buffer.from(JSON.stringify(body))
       const req = http.request(
@@ -127,9 +192,9 @@ export class TeamclaudeControl {
           host: '127.0.0.1',
           port: this.port,
           path,
-          method: 'POST',
+          method,
           headers: {
-            'x-api-key': this.apiKey,
+            ...(sendApiKey ? { 'x-api-key': this.apiKey } : {}),
             ...(payload
               ? { 'content-type': 'application/json', 'content-length': String(payload.length) }
               : {})
@@ -161,4 +226,26 @@ export class TeamclaudeControl {
       req.end()
     })
   }
+}
+
+/** Defensive read of `{ effort: { level } | null }`. Anything unrecognized (a
+ *  missing key, a level this build does not know) reads as "no override" rather
+ *  than leaking an unvalidated string into the frozen `TcEffortState`. */
+function parseEffortState(json: Record<string, unknown> | null): TcEffortState {
+  const effort = json?.effort
+  if (!effort || typeof effort !== 'object') {
+    return null
+  }
+  const level = (effort as { level?: unknown }).level
+  return typeof level === 'string' && EFFORT_LEVELS.has(level)
+    ? { level: level as TcEffortLevel }
+    : null
+}
+
+/** Collapse an effort result — or a missing control plane — to the bridge's
+ *  `TcEffortState`. A failed read/write is reported as "no override known"; the
+ *  renderer never sees a raw transport error, matching how the rest of this
+ *  module degrades when the proxy is offline. */
+export function effortOrNull(result: EffortResult | undefined): TcEffortState {
+  return result?.ok ? result.effort : null
 }

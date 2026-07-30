@@ -232,9 +232,11 @@ import {
   type TcAccountSetPayload,
   type TcActivityRow,
   type TcBridge,
+  type TcEffortLevel,
   type TcRoute,
   type TcState
 } from '../shared/teamclaude-types'
+import { TC_EFFORT_IPC } from '../shared/teamclaude-effort-ipc'
 import {
   CPA_IPC,
   type CpaBridge,
@@ -4562,7 +4564,12 @@ const api = {
     startProxy: () => ipcRenderer.invoke(TC_IPC.proxyStart),
     stopProxy: (args: { confirmLiveSessions: number }) =>
       ipcRenderer.invoke(TC_IPC.proxyStop, args),
-    logTail: () => ipcRenderer.invoke(TC_IPC.logTail)
+    logTail: () => ipcRenderer.invoke(TC_IPC.logTail),
+    // Effort override: channels come from TC_EFFORT_IPC (additive to TC_IPC).
+    // Both resolve to TcEffortState — the main side never rejects, so a proxy
+    // that is down reads as `null` ("no override") instead of an error.
+    getEffort: () => ipcRenderer.invoke(TC_EFFORT_IPC.get),
+    setEffort: (level: TcEffortLevel | null) => ipcRenderer.invoke(TC_EFFORT_IPC.set, level)
   } satisfies PreloadApi['teamclaude'] satisfies TcBridge,
 
   cliproxy: {

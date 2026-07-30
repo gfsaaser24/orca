@@ -13426,6 +13426,14 @@
       "throttled": "Throttled",
       "error": "Error"
     },
+    "effort": {
+      "none": "None",
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "xhigh": "Extra high",
+      "max": "Max"
+    },
     "resetsIn": "resets in {{value0}}",
     "widget": {
       "label": "TeamClaude usage",
@@ -13448,7 +13456,19 @@
       "usageUnavailable": "Usage is unavailable right now.",
       "noAccounts": "No accounts configured.",
       "pinHint": "Pinned accounts route this session only; the pin clears when Orca restarts.",
-      "asOf": "as of {{value0}} ago"
+      "asOf": "as of {{value0}} ago",
+      "hotSwapNoModels": "No models to pick from yet.",
+      "hotSwapModelAria": "Switch model to {{value0}}",
+      "hotSwapEffortAria": "Set reasoning effort to {{value0}}",
+      "hotSwapNoSession": "No terminal is open, so there is no session to switch.",
+      "hotSwapNotClaude": "This terminal is not running Claude, so its model cannot be changed here.",
+      "hotSwapTitle": "Hot swap",
+      "hotSwapModel": "Model",
+      "hotSwapEffort": "Reasoning effort",
+      "hotSwapEffortUnavailable": "This proxy cannot change reasoning effort yet.",
+      "hotSwapApply": "Apply",
+      "hotSwapApplied": "Sent to the running session.",
+      "hotSwapOtherModels": "Other"
     },
     "accounts": {
       "priority": "Priority",

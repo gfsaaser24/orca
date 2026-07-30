@@ -134,6 +134,44 @@ describe('TeamclaudeFlyout offline degradation', () => {
     expect(container.querySelector('.opacity-60')).toBeNull()
   })
 
+  it('renders the hot-swap section only when hot-swap data is supplied', () => {
+    act(() =>
+      root.render(
+        <TeamclaudeFlyout
+          state={makeState('owned', READY)}
+          controls={controls}
+          onOpenPanel={() => {}}
+        />
+      )
+    )
+    expect(container.textContent).not.toContain('Hot swap')
+
+    act(() =>
+      root.render(
+        <TeamclaudeFlyout
+          state={makeState('owned', READY)}
+          controls={controls}
+          onOpenPanel={() => {}}
+          hotSwap={{
+            models: [{ id: 'claude-opus-5' }],
+            target: {
+              ptyId: 'pty-1',
+              tabTitle: 'claude',
+              agent: 'claude',
+              claudeFamily: true
+            },
+            effortBridge: null,
+            writeToPty: vi.fn()
+          }}
+        />
+      )
+    )
+    expect(container.textContent).toContain('Hot swap')
+    expect(
+      container.querySelector('button[aria-label="Switch model to claude-opus-5"]')
+    ).not.toBeNull()
+  })
+
   it('filters backend gateway accounts from the fleet', () => {
     act(() =>
       root.render(

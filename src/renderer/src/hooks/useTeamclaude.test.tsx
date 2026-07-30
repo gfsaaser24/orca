@@ -80,7 +80,9 @@ function installBridge(
     setAccount: vi.fn(async () => {}),
     startProxy: vi.fn(async () => ({ ok: true as const })),
     stopProxy: vi.fn(async () => {}),
-    logTail: vi.fn(() => Promise.resolve(logTailRows))
+    logTail: vi.fn(() => Promise.resolve(logTailRows)),
+    getEffort: vi.fn(async () => null),
+    setEffort: vi.fn(async () => null)
   }
   ;(window as unknown as { api: { teamclaude: TcBridge } }).api = { teamclaude: bridge }
   return {

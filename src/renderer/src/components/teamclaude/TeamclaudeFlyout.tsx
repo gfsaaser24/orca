@@ -16,6 +16,7 @@ import {
   StateDot,
   ThrottleBadge
 } from './teamclaude-atoms'
+import { TeamclaudeHotSwap, type TeamclaudeHotSwapProps } from './TeamclaudeHotSwap'
 import {
   BUCKET_KEYS,
   BUCKET_LABELS,
@@ -114,6 +115,9 @@ export type TeamclaudeFlyoutProps = {
   onOpenPanel: () => void
   now?: number
   className?: string
+  /** Model/effort hot swap for the live session. Omitted = section hidden.
+   *  `effortEnabled` is derived here from control readiness, not passed in. */
+  hotSwap?: Omit<TeamclaudeHotSwapProps, 'effortEnabled'>
 }
 
 export function TeamclaudeFlyout({
@@ -121,7 +125,8 @@ export function TeamclaudeFlyout({
   controls,
   onOpenPanel,
   now = Date.now(),
-  className
+  className,
+  hotSwap
 }: TeamclaudeFlyoutProps): React.JSX.Element {
   const { t } = useTranslation()
   const gates = surfaceGates(state)
@@ -198,6 +203,13 @@ export function TeamclaudeFlyout({
       ) : (
         fleet(false)
       )}
+
+      {hotSwap ? (
+        <>
+          <Separator />
+          <TeamclaudeHotSwap {...hotSwap} effortEnabled={gates.controlsEnabled} />
+        </>
+      ) : null}
 
       {anyPinned ? (
         <>
